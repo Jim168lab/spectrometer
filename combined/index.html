@@ -1,0 +1,960 @@
+<!doctype html>
+<html lang="zh-Hant">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>旋光分光聯合實驗</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap">
+<style>
+/* Phone version of rotation_spectrometer.html, laid out like ../optical_rotation/polarimeter_mobile.html: single column, sticky fit readout, charts scroll with the page */
+:root{
+  --paper:#edf1f5; --surface:#fbfcfd; --ink:#17202b; --muted:#566273; --rule:#d2d9e1;
+  --accent:#2646a6; --accent-soft:#e2e8f7; --ref:#8a95a3; --warn:#b4451f; --liquid:rgb(214 160 40/.26);
+  --f-display:"Noto Serif TC","Songti TC","PMingLiU",serif;
+  --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --paper:#0e1319; --surface:#151c24; --ink:#e3e8ee; --muted:#95a1b0; --rule:#29333f;
+  --accent:#8fa9ff; --accent-soft:#1e2943; --ref:#6b7787; --warn:#ff9a76; --liquid:rgb(230 180 70/.22); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0e1319; --surface:#151c24; --ink:#e3e8ee; --muted:#95a1b0; --rule:#29333f;
+  --accent:#8fa9ff; --accent-soft:#1e2943; --ref:#6b7787; --warn:#ff9a76; --liquid:rgb(230 180 70/.22); color-scheme:dark}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.65;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 56px}
+.wrap{max-width:680px;margin:0 auto;display:grid;gap:24px}
+h1,h2{text-wrap:balance;margin:0}
+h2{font-family:var(--f-display);font-weight:600;font-size:20px;line-height:1.3}
+p{margin:0}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.muted{color:var(--muted)}
+.warn{color:var(--warn)}
+header.mast{padding-block:24px 0;display:grid;gap:10px}
+header.mast h1{font-family:var(--f-display);font-weight:700;font-size:clamp(26px,7vw,40px);line-height:1.15}
+/* sticky readout keeps the fit result in view while adjusting controls */
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+.readout{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;margin-inline:calc(-1 * max(16px,env(safe-area-inset-left,0px)));
+  padding:9px max(16px,env(safe-area-inset-left,0px));background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--rule);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:2px 12px;font-size:13px}
+.readout b{font-family:var(--f-mono);font-size:17px;font-weight:500;color:var(--accent)}
+.lead{max-width:70ch;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:10px}
+.section-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 16px;margin-bottom:10px}
+.section-head p{font-size:13px;color:var(--muted)}
+
+.stage{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+.diagram{padding:14px}
+.diagram canvas{display:block;width:100%;height:300px}
+.panel{padding:18px;display:grid;gap:14px}
+.panel .pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.ctl{display:grid;gap:5px;min-width:0}
+.ctl>label{font-size:13px;font-weight:500;display:flex;justify-content:space-between;gap:8px}
+.ctl output{font-family:var(--f-mono);color:var(--accent);font-weight:500}
+.hint{font-size:12px;color:var(--muted)}
+select,button,input[type=number]{font:inherit;font-size:16px;color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:7px;padding:6px 10px}
+input[type=number]{width:100%}
+select{width:100%}
+select:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=range]{width:100%;accent-color:var(--accent)}
+input[type=file]{font:inherit;font-size:13px;max-width:100%;color:var(--muted)}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+button{cursor:pointer}
+button:hover{border-color:var(--accent);color:var(--accent)}
+.hidden{display:none}
+.seg{display:inline-flex;border:1px solid var(--rule);border-radius:7px;overflow:hidden;width:max-content}
+.seg label{padding:5px 14px;cursor:pointer;font-size:13.5px;position:relative}
+.seg label+label{border-left:1px solid var(--rule)}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label:has(input:checked){background:var(--accent-soft);color:var(--accent);font-weight:500}
+.seg label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-2px}
+
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.tile{padding:13px 15px;display:grid;gap:2px;align-content:start}
+.tile .k{font-size:12.5px;color:var(--muted)}
+.tile .v{font-family:var(--f-mono);font-size:clamp(19px,2.3vw,25px);font-weight:500;line-height:1.25;font-variant-numeric:tabular-nums}
+.tile .v small{font-size:.5em;color:var(--muted);margin-left:3px}
+.tile .s{font-size:12px;color:var(--muted)}
+
+.charts{display:grid;grid-template-columns:minmax(0,1fr);gap:18px}
+.charts .wide{grid-column:1/-1}
+.chart-box{padding:14px 14px 10px;position:relative}
+.chart-box canvas{display:block;width:100%;height:240px;touch-action:pan-y}
+.chart-box canvas.strips{height:84px;margin-bottom:4px}
+.chart-box canvas.wf{height:260px;cursor:crosshair}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12.5px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:18px;height:0;vertical-align:middle;margin-right:6px;border-top:2px solid}
+.legend .dash i{border-top-style:dashed}
+.legend .dot i{width:9px;height:9px;border:0;border-radius:50%;background:currentColor}
+.cap{font-size:13px;color:var(--muted);margin-top:8px;max-width:76ch}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--rule);border-radius:7px;padding:6px 9px;
+  font-size:12px;line-height:1.5;box-shadow:0 4px 14px rgb(0 0 0/.12);white-space:nowrap;z-index:2}
+.tip b{font-family:var(--f-mono);font-weight:500}
+.tip .r{display:flex;align-items:center;gap:6px}
+.tip .r i{width:10px;height:2px;display:inline-block}
+
+.fit{padding:14px 18px;display:grid;gap:10px;align-content:start}
+.fit .tblwrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:right;padding:5px 8px;border-bottom:1px solid var(--rule);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-weight:500;font-size:12.5px;color:var(--muted)}
+td{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+#tblCand tbody tr{cursor:pointer}
+#tblCand tbody tr:hover td{background:var(--accent-soft)}
+#tblCand tbody tr.sel td{color:var(--accent);font-weight:500}
+
+.imp{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+.impcard{padding:18px;display:grid;gap:14px}
+.status{font-size:13px;color:var(--muted)}
+
+details.card{padding:14px 18px}
+details summary{cursor:pointer;font-weight:500}
+details ol,details ul{margin:10px 0 0;padding-left:22px;display:grid;gap:6px;font-size:14px}
+.eq{font-family:var(--f-mono);font-size:13.5px;background:var(--accent-soft);border-radius:6px;padding:8px 12px;overflow-x:auto}
+.basis{display:grid;gap:10px;padding:18px}
+.basis ul{margin:0;padding-left:20px;display:grid;gap:4px;font-size:14px}
+</style>
+
+<body>
+<div class="wrap">
+  <header class="mast">
+    <div class="eyebrow">Polarimetry × Spectroscopy</div>
+    <h1>旋光管＋分光儀聯合實驗</h1>
+    <p class="lead">把 DVD 光柵分光儀的狹縫架在一公尺旋光管的出口，觀測點不再只讀 R、G、B 三個值，而是記錄整條光譜。糖水旋光角很大時，光譜上會出現一條條暗帶（通道光譜）。數暗帶的位置，可以一次量出各波長的旋光角，並擬合出比旋光度 [α]₅₈₉ 和旋光色散常數 λ₀。</p>
+  </header>
+
+  <div class="readout" aria-live="polite"><span>[α]₅₈₉ <b id="roSpec">—</b></span><span>α₅₄₆ <b id="ro546">—</b></span><span class="muted" id="roSign"></span></div>
+
+  <section class="stage">
+    <div class="card diagram">
+      <div class="section-head"><h2>光路</h2><p>白光 LED → 起偏器 → 糖水 → 檢偏器 → 狹縫 → DVD 光柵 → webcam。圓圈是迎著光看的偏振方向。</p></div>
+      <canvas id="cvDiagram" aria-label="聯合實驗光路示意圖"></canvas>
+    </div>
+
+    <div class="card panel">
+      <div class="ctl">
+        <label for="selSub">溶質</label>
+        <select id="selSub">
+          <option value="fructose">果糖（−92.4°）</option>
+          <option value="sucrose">蔗糖（+66.5°）</option>
+          <option value="glucose">葡萄糖（+52.7°）</option>
+          <option value="invert">轉化糖／蜂蜜（約 −20°）</option>
+          <option value="custom">自訂</option>
+        </select>
+      </div>
+      <div class="ctl hidden" id="customBox">
+        <label for="numSpec">[α]₅₈₉（°·dm⁻¹·mL·g⁻¹）</label>
+        <input type="number" id="numSpec" value="-92.4" step="0.1">
+      </div>
+      <div class="ctl">
+        <label for="rngC">濃度 <output id="outC"></output></label>
+        <input type="range" id="rngC" min="0" max="80" step="1" value="30">
+      </div>
+      <div class="ctl">
+        <label for="rngH">液高（光程） <output id="outH"></output></label>
+        <input type="range" id="rngH" min="0" max="100" step="1" value="100">
+      </div>
+      <div class="ctl">
+        <label for="rngT">檢偏器角度 θ <output id="outT"></output></label>
+        <input type="range" id="rngT" min="0" max="180" step="1" value="90">
+        <div class="btns">
+          <button type="button" data-theta="0">平行 0°</button>
+          <button type="button" data-theta="90">正交 90°</button>
+        </div>
+      </div>
+      <div class="pair">
+        <div class="ctl">
+          <label for="selSrc">光源</label>
+          <select id="selSrc">
+            <option value="ledCool">白光 LED（冷白）</option>
+            <option value="ledWarm">白光 LED（暖白）</option>
+            <option value="halogen">鹵素燈</option>
+          </select>
+        </div>
+        <div class="ctl">
+          <label for="selGr">光柵</label>
+          <select id="selGr">
+            <option value="dvd">DVD（740 nm）</option>
+            <option value="g1000">1000 線/mm</option>
+            <option value="cd">CD（1600 nm）</option>
+          </select>
+        </div>
+      </div>
+      <div class="ctl">
+        <label for="rngSlit">狹縫寬度 <output id="outSlit"></output></label>
+        <input type="range" id="rngSlit" min="0.05" max="1.5" step="0.05" value="1">
+      </div>
+      <div class="pair">
+        <div class="ctl">
+          <label for="rngL0">Drude λ₀ <output id="outL0"></output></label>
+          <input type="range" id="rngL0" min="0" max="250" step="1" value="160">
+        </div>
+        <div class="ctl">
+          <label for="rngNoise">雜訊 <output id="outNoise"></output></label>
+          <input type="range" id="rngNoise" min="0" max="5" step="0.1" value="1">
+        </div>
+      </div>
+      <div class="ctl">
+        <label for="selOrder">級次判定</label>
+        <select id="selOrder">
+          <option value="auto">自動：選最符合 Drude 形狀的</option>
+          <option value="guess">依估計的 [α]₅₈₉</option>
+        </select>
+      </div>
+      <div class="ctl">
+        <label for="selSign">旋向</label>
+        <select id="selSign">
+          <option value="shift">轉檢偏器 +10° 再拍一張，看暗帶往哪移</option>
+          <option value="pos">右旋（+）</option>
+          <option value="neg">左旋（−）</option>
+        </select>
+        <span class="hint">單一張光譜分不出左右旋：cos²(θ − α) 和 cos²(θ − (2θ − α)) 完全一樣。</span>
+      </div>
+      <div class="ctl hidden" id="guessBox">
+        <label for="numGuess">估計 [α]₅₈₉（只需要符號和大概大小）</label>
+        <input type="number" id="numGuess" value="-92.4" step="1">
+      </div>
+    </div>
+  </section>
+
+  <section class="tiles" aria-live="polite">
+    <div class="card tile"><span class="k">偵測到的極值</span><span class="v" id="tExt"></span><span class="s" id="tExtS"></span></div>
+    <div class="card tile"><span class="k">解析度 FWHM @ 546 nm</span><span class="v" id="tFwhm"></span><span class="s" id="tFwhmS"></span></div>
+    <div class="card tile"><span class="k">旋向</span><span class="v" id="tSign"></span><span class="s" id="tSignS"></span></div>
+    <div class="card tile"><span class="k">擬合 [α]₅₈₉</span><span class="v" id="tSpec"></span><span class="s" id="tSpecS"></span></div>
+    <div class="card tile"><span class="k">擬合 λ₀</span><span class="v" id="tL0"></span><span class="s" id="tL0S"></span></div>
+    <div class="card tile"><span class="k">擬合 α @ 546 nm</span><span class="v" id="t546"></span><span class="s" id="t546S"></span></div>
+  </section>
+
+  <section class="charts">
+    <div class="card chart-box wide">
+      <div class="section-head"><h2>相機看到的光譜</h2><p id="specNote"></p></div>
+      <canvas id="cvStrips" class="strips" aria-label="參考與樣品光譜條"></canvas>
+      <canvas id="cvT" aria-label="穿透率 T 對波長"></canvas>
+      <div class="legend">
+        <span style="color:var(--accent)"><i></i><span class="muted">量到的 T = I / I₀</span></span>
+        <span class="dash" style="color:var(--ref)" id="lgTm"><i></i><span class="muted">模型 cos²(θ − α)，未模糊</span></span>
+        <span class="dot" style="color:var(--ink)"><i></i><span class="muted">暗帶（α ≡ θ − 90°）</span></span>
+        <span class="dot" style="color:var(--accent)"><i></i><span class="muted">亮帶（α ≡ θ）</span></span>
+      </div>
+      <p class="cap" id="capDir"></p>
+    </div>
+
+    <div class="card chart-box">
+      <div class="section-head"><h2>旋光色散 α(λ)</h2></div>
+      <canvas id="cvA" aria-label="旋光角對波長"></canvas>
+      <div class="legend">
+        <span style="color:var(--accent)"><i></i><span class="muted">Drude 擬合</span></span>
+        <span class="dash" style="color:var(--ref)" id="lgAm"><i></i><span class="muted">模擬設定的 α(λ)</span></span>
+        <span class="dot" style="color:var(--ink)"><i></i><span class="muted">由極值位置得到的 α</span></span>
+      </div>
+      <p class="cap">每個極值只告訴我們 α 除以 180° 的餘數。相鄰極值相差 90°，所以只剩一個整數未知，由下表決定。</p>
+    </div>
+
+    <div class="card fit">
+      <div class="section-head" style="margin:0"><h2>級次候選</h2><p>點一列可以手動指定。</p></div>
+      <div class="tblwrap">
+        <table id="tblCand"><thead><tr><th>旋向</th><th>α₅₄₆</th><th>[α]₅₈₉</th><th>λ₀</th><th>殘差 RMS</th></tr></thead><tbody></tbody></table>
+      </div>
+      <p class="cap" id="capCand" style="margin:0"></p>
+    </div>
+
+    <div class="card chart-box wide">
+      <div class="section-head"><h2>邊加糖水邊看光譜</h2><p>縱軸是液高，每一列是那個液高下相機看到的光譜（模擬，未模糊）。點一下圖可以改液高。</p></div>
+      <canvas id="cvWf" class="wf" aria-label="光譜對液高的瀑布圖"></canvas>
+      <p class="cap" id="capWf"></p>
+    </div>
+  </section>
+
+  <section class="card impcard">
+    <div class="section-head" style="margin:0"><h2>匯入實測光譜</h2><p>CSV 或 TXT，第一欄是已校正的波長（nm），第二欄是強度。上面的濃度、液高和 θ 要設成實驗時的值。</p></div>
+    <div class="imp">
+      <div class="ctl">
+        <label>資料來源</label>
+        <div class="seg" role="radiogroup" aria-label="資料來源">
+          <label><input type="radio" name="dsrc" value="sim" checked>模擬</label>
+          <label><input type="radio" name="dsrc" value="imp" id="radImp" disabled>匯入</label>
+        </div>
+      </div>
+      <div class="ctl">
+        <label for="fRef">參考 I₀（清水、偏光片平行）</label>
+        <input type="file" id="fRef" accept=".csv,.txt,.tsv,.dat">
+      </div>
+      <div class="ctl">
+        <label for="fSam">樣品 I（糖水、角度 θ）</label>
+        <input type="file" id="fSam" accept=".csv,.txt,.tsv,.dat">
+        <span class="hint">一個檔案有三欄（λ, I₀, I）或四欄（再加 θ + 10° 的 I）時，只選這一個就好。</span>
+      </div>
+      <div class="ctl">
+        <label for="fSam2">樣品 I（θ + 10°，選填）</label>
+        <input type="file" id="fSam2" accept=".csv,.txt,.tsv,.dat">
+        <span class="hint">用來判斷旋向。沒有這張時，請在上面手動選旋向。</span>
+      </div>
+      <div class="ctl">
+        <label>測試用</label>
+        <div class="btns"><button type="button" id="btnCsv">匯出模擬光譜 CSV</button></div>
+        <span class="hint">四欄格式，和匯入相同，可以先拿來試流程。</span>
+      </div>
+    </div>
+    <p class="status" id="impStatus">還沒有匯入資料。</p>
+  </section>
+
+  <details class="card">
+    <summary>實驗步驟</summary>
+    <ol>
+      <li><b>校正分光儀。</b>對準日光燈，記下汞線 435.8、546.1 nm 和銪 611.6 nm 的像素位置，做線性擬合。之後不要再動相機和光柵。</li>
+      <li><b>組裝。</b>旋光管直立，LED 加一片擴散紙放在最下面，第一偏光片貼在管底。第二偏光片放在管口，貼一圈角度刻度。分光儀盒子立起來，狹縫朝下對準第二偏光片的中心。接縫全部用黑膠帶封好。</li>
+      <li><b>鎖定相機。</b>關閉自動曝光、自動白平衡和自動增益。最亮處不要飽和（Theremino 裡的曲線不能有平頂）。</li>
+      <li><b>暗電流和平均。</b>LED 關掉拍一張，之後每張都減掉。每張光譜平均 10 幀以上，雜訊降到 1% 以下，暗的波段才分析得到。</li>
+      <li><b>參考 I₀。</b>管裡裝清水到和樣品相同的液高，兩片偏光片平行（θ = 0°），存檔。</li>
+      <li><b>樣品 I。</b>換成糖水，同樣液高，θ 轉到 90°，存檔。兩個檔匯入本頁，就會算出 α(λ)。</li>
+      <li><b>判斷旋向。</b>θ 每次加 15°，看暗帶往藍邊還是紅邊移。往藍邊是右旋，往紅邊是左旋。</li>
+      <li><b>確定級次。</b>暗帶少於三條時，形狀擬合分不出整數。改用液高掃描：從空管開始每加 5 cm 拍一次，數 546 nm 處變暗幾次，每一次代表 180°。</li>
+      <li><b>換濃度重複。</b>α 應該和濃度成正比。記錄水溫，果糖每升高 1 °C，[α] 大約變小 0.6%。</li>
+    </ol>
+    <ul>
+      <li>便宜的偏光片在 420 nm 以下和 680 nm 以上會漏光，正交時暗帶不會全黑，但位置不受影響。</li>
+      <li>蜂蜜要先稀釋、過濾。混濁會散射光，讓偏振變差。</li>
+      <li>狹縫越窄解析度越好，但光變暗。暗帶很密時（高濃度、短波長）才需要縮窄。</li>
+    </ul>
+  </details>
+
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const L_MIN = 380, L_MAX = 780, DL = 0.5;
+const LAM = []; for (let i = 0; i <= (L_MAX - L_MIN) / DL; i++) LAM.push(L_MIN + i * DL);
+const N = LAM.length;
+const SUBS = {fructose: -92.4, sucrose: 66.5, glucose: 52.7, invert: -20};
+const SUBNAME = {fructose: '果糖', sucrose: '蔗糖', glucose: '葡萄糖', invert: '轉化糖', custom: '自訂溶質'};
+const L0_FIXED = 160;
+
+const gauss = (x, m, s) => Math.exp(-0.5 * ((x - m) / s) ** 2);
+const g2 = (x, m, s1, s2) => gauss(x, m, x < m ? s1 : s2);
+const planck = (l, T) => { const m = l * 1e-9; return 1 / (m ** 5 * (Math.exp(1.4388e-2 / (m * T)) - 1)); };
+function mulberry32(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function wl2rgb(l){
+  let r = 0, g = 0, b = 0;
+  if (l < 380 || l > 780) return [0, 0, 0];
+  if (l < 440) { r = -(l - 440) / 60; b = 1; }
+  else if (l < 490) { g = (l - 440) / 50; b = 1; }
+  else if (l < 510) { g = 1; b = -(l - 510) / 20; }
+  else if (l < 580) { r = (l - 510) / 70; g = 1; }
+  else if (l < 645) { r = 1; g = -(l - 645) / 65; }
+  else r = 1;
+  const f = l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 700 ? 0.3 + 0.7 * (780 - l) / 80 : 1;
+  return [r * f, g * f, b * f];
+}
+
+const resp = l => 1 / (1 + Math.exp(-(l - 410) / 9)) / (1 + Math.exp((l - 668) / 11));
+const SRC = {
+  ledCool: l => gauss(l, 450, 10) + 0.5 * g2(l, 565, 45, 70),
+  ledWarm: l => 0.45 * gauss(l, 452, 10) + g2(l, 600, 55, 72),
+  halogen: l => planck(l, 2850),
+};
+
+// spectrometer geometry from DIY_datasheet.jpg: slit → 12 cm → grating → 10 cm → webcam (f 2.2 mm, 1280 px over 3.6 mm)
+const L1 = 10, L2 = 12, F_MM = 2.2, SENSOR_MM = 3.6, NPX = 1280, TBMAX = SENSOR_MM / 2 / F_MM;
+const GR = {dvd: 740, g1000: 1000, cd: 1600};
+// ray reaching the on-axis camera at tanβ = tb leaves the grating at height g (cm); sinβ − sinα_in = λ/d
+function lamTb(tb, d){ const g = -L1 * tb; return {lam: d * (tb / Math.hypot(1, tb) - g / Math.hypot(L2, g)), g}; }
+function tbOf(lam, d){
+  if (lamTb(TBMAX, d).lam < lam) return null;
+  let a = 0, b = TBMAX;
+  for (let k = 0; k < 50; k++) { const m = (a + b) / 2; if (lamTb(m, d).lam < lam) a = m; else b = m; }
+  return (a + b) / 2;
+}
+function instrAt(lam, d, slit){
+  const tb = tbOf(lam, d); if (tb == null) return null;
+  const e = 1e-4, g = lamTb(tb, d).g;
+  const disp = (lamTb(tb + e, d).lam - lamTb(tb - e, d).lam) / (2 * e);
+  const Wp = 2 * disp * (SENSOR_MM / NPX) / F_MM;          // ~2 px: pixel + lens blur
+  const Ws = d * L2 * L2 / Math.pow(L2 * L2 + g * g, 1.5) * slit / 10;
+  return {Ws, Wp, g};
+}
+
+const st = {pick: null, data: 'sim'};
+function readState(){
+  st.sub = $('selSub').value;
+  st.spec = st.sub === 'custom' ? (+$('numSpec').value || 0) : SUBS[st.sub];
+  st.c = +$('rngC').value;       // g/100 mL
+  st.h = +$('rngH').value;       // cm
+  st.th = +$('rngT').value;      // deg
+  st.src = $('selSrc').value;
+  st.gr = $('selGr').value;
+  st.slit = +$('rngSlit').value; // mm
+  st.l0 = +$('rngL0').value;     // nm
+  st.noise = +$('rngNoise').value;
+  st.order = $('selOrder').value;
+  st.guess = +$('numGuess').value || 0;
+  st.sign = $('selSign').value;
+  st.lc = (st.h / 10) * (st.c / 100);
+  $('customBox').classList.toggle('hidden', st.sub !== 'custom');
+  $('outC').textContent = st.c + ' g/100 mL';
+  $('outH').textContent = st.h + ' cm';
+  $('outT').textContent = st.th + '°';
+  $('outSlit').textContent = st.slit.toFixed(2) + ' mm';
+  $('outL0').textContent = st.l0 + ' nm';
+  $('outNoise').textContent = st.noise.toFixed(1) + '%';
+}
+
+const alphaAt = (l, h = st.h) => st.spec * (589 ** 2 - st.l0 ** 2) / (l ** 2 - st.l0 ** 2) * (h / 10) * (st.c / 100);
+const rad = d => d * Math.PI / 180;
+const malus = (th, a) => Math.cos(rad(th - a)) ** 2;
+const mod180 = a => ((a % 180) + 180) % 180;
+const fin = v => v != null && Number.isFinite(v);
+
+/* ---------- instrument + simulation ---------- */
+let KER = [];
+function buildKernel(){
+  const d = GR[st.gr];
+  KER = LAM.map(l => {
+    const r = instrAt(l, d, st.slit); if (!r) return null;
+    const a = Math.abs(r.Ws - r.Wp) / 2, b = (r.Ws + r.Wp) / 2, n = Math.ceil(b / DL);
+    const w = []; let s = 0;
+    for (let j = -n; j <= n; j++) { const x = Math.abs(j * DL); const v = x <= a ? 1 : x >= b ? 0 : (b - x) / (b - a); w.push(v); s += v; }
+    return {n, w: w.map(v => v / s), fwhm: Math.max(r.Ws, r.Wp)};
+  });
+}
+function blur(arr){
+  return arr.map((_, i) => {
+    const k = KER[i]; if (!k) return 0;
+    let s = 0, ws = 0;
+    for (let j = -k.n; j <= k.n; j++) { const t = i + j; if (t >= 0 && t < N) { s += k.w[j + k.n] * arr[t]; ws += k.w[j + k.n]; } }
+    return s / ws;
+  });
+}
+function simulate(th = st.th, seed = 20261024){
+  const f = SRC[st.src];
+  let S = LAM.map(l => f(l) * resp(l)); const mx = Math.max(...S); S = S.map(v => v / mx);
+  const A = LAM.map(l => alphaAt(l)), T = A.map(a => malus(th, a));
+  const rnd = mulberry32(seed);
+  const gn = () => Math.sqrt(-2 * Math.log(1 - rnd())) * Math.cos(2 * Math.PI * rnd());
+  const sg = st.noise / 100;
+  const I0 = blur(S).map(v => v + sg * gn()), I = blur(S.map((s, i) => s * T[i])).map(v => v + sg * gn());
+  return {S, A, T, I0, I};
+}
+
+/* ---------- analysis: T → extremes → α(λ) → Drude fit (same path for simulated and imported data) ---------- */
+const SWING = 0.2, EDGE = 6;
+function analyze(I0, I, th = st.th){
+  const mx = Math.max(...I0.filter(fin)), sn = noiseOf(I0);
+  // keep wavelengths where the smoothed T is good to ~0.04, i.e. well below the 0.2 swing needed to count an extreme
+  const ok = I0.map((v, i) => fin(v) && fin(I[i]) && v > 0.1 * mx && v > 10 * sn);
+  const T = I0.map((v, i) => ok[i] ? I[i] / v : null);
+  const Ts = new Array(N).fill(null), ext = [];
+  let i = 0, seg = 0;
+  while (i < N) {
+    if (!ok[i]) { i++; continue; }
+    let e = i; while (e + 1 < N && ok[e + 1]) e++;
+    if (e - i >= 20) { const n0 = ext.length; segExtremes(T, Ts, i, e, ext); for (let j = n0; j < ext.length; j++) ext[j].seg = seg; seg++; }
+    i = e + 1;
+  }
+  ext.forEach(x => { x.base = mod180(x.type === 'min' ? th - 90 : th); });
+  return {T, Ts, ext, mx};
+}
+// noise of I₀ from the second difference: r = I₀[i] − (I₀[i−1] + I₀[i+1])/2 has σ·√1.5
+function noiseOf(I0){
+  const r = [];
+  for (let i = 1; i < N - 1; i++) if (fin(I0[i - 1]) && fin(I0[i]) && fin(I0[i + 1])) r.push(Math.abs(I0[i] - (I0[i - 1] + I0[i + 1]) / 2));
+  if (!r.length) return 0;
+  r.sort((a, b) => a - b);
+  return r[r.length >> 1] * 1.4826 / Math.sqrt(1.5);
+}
+function segExtremes(T, Ts, s, e, ext){
+  const sig = 3, r = 9;
+  for (let i = s; i <= e; i++) { let a = 0, w = 0;
+    for (let j = -r; j <= r; j++) { const t = i + j; if (t < s || t > e) continue; const k = Math.exp(-0.5 * (j / sig) ** 2); a += k * T[t]; w += k; }
+    Ts[i] = a / w; }
+  const push = (k, type) => {
+    if (k - s < EDGE || e - k < EDGE) return;
+    const y0 = Ts[k - 1], y1 = Ts[k], y2 = Ts[k + 1], den = y0 - 2 * y1 + y2;
+    const off = den ? Math.max(-1, Math.min(1, 0.5 * (y0 - y2) / den)) : 0;
+    ext.push({lam: LAM[k] + off * DL, type, T: y1});
+  };
+  let dir = 0, cand = s, lo = s, hi = s;
+  for (let i = s; i <= e; i++) {
+    const v = Ts[i];
+    if (dir === 0) {
+      if (v > Ts[hi]) hi = i; if (v < Ts[lo]) lo = i;
+      if (v - Ts[lo] >= SWING) { push(lo, 'min'); dir = 1; cand = i; }
+      else if (Ts[hi] - v >= SWING) { push(hi, 'max'); dir = -1; cand = i; }
+    } else if (dir === 1) {
+      if (v > Ts[cand]) cand = i; else if (Ts[cand] - v >= SWING) { push(cand, 'max'); dir = -1; cand = i; }
+    } else {
+      if (v < Ts[cand]) cand = i; else if (v - Ts[cand] >= SWING) { push(cand, 'min'); dir = 1; cand = i; }
+    }
+  }
+}
+function drude(L, A, fixL0){
+  let best = null;
+  const tryL0 = l0 => {
+    let sxa = 0, sxx = 0; const x = L.map(l => 1 / (l * l - l0 * l0));
+    x.forEach((xi, i) => { sxa += xi * A[i]; sxx += xi * xi; });
+    const K = sxa / sxx; let r = 0; x.forEach((xi, i) => { r += (A[i] - K * xi) ** 2; });
+    const rms = Math.sqrt(r / L.length);
+    if (!best || rms < best.rms) best = {K, l0, rms};
+  };
+  if (fixL0 != null) tryL0(fixL0); else for (let l0 = 0; l0 <= 250; l0++) tryL0(l0);
+  return best;
+}
+function candidates(ext, signs){
+  const out = []; if (!ext.length) return out;
+  const E = [...ext].sort((a, b) => b.lam - a.lam);  // longest wavelength first: smallest |α|
+  const L = E.map(x => x.lam), fix = E.length < 3 ? L0_FIXED : null;
+  for (const s of signs) {
+    const starts = [];
+    for (let k = -40; k <= 40; k++) { const v = E[0].base + 180 * k; if (Math.sign(v) === s && Math.abs(v) > 0.5) starts.push(v); }
+    starts.sort((a, b) => Math.abs(a) - Math.abs(b));
+    // extremes hidden in a dim gap between segments are unknown: try 0–8 extra periods across each of the first two gaps
+    const gaps = []; for (let j = 1; j < E.length; j++) if (E[j].seg !== E[j - 1].seg) gaps.push(j);
+    const G = gaps.slice(0, 2), combos = [[]];
+    G.forEach(() => { const nx = []; combos.forEach(c => { for (let m = 0; m <= 8; m++) nx.push([...c, m]); }); combos.splice(0, combos.length, ...nx); });
+    starts.slice(0, 30).forEach((a0, k) => {
+      let bestC = null;
+      combos.forEach(cmb => {
+        const A = [a0];
+        for (let j = 1; j < E.length; j++) {
+          const p = A[j - 1], b = E[j].base, gi = G.indexOf(j), extra = gi >= 0 ? 180 * cmb[gi] * s : 0;
+          A.push((s > 0 ? b + 180 * Math.ceil((p + 0.5 - b) / 180) : b + 180 * Math.floor((p - 0.5 - b) / 180)) + extra);
+        }
+        const f = drude(L, A, fix);
+        if (!bestC || f.rms < bestC.rms) bestC = {key: s + ':' + k, s, L, A, ...f, a546: f.K / (546 ** 2 - f.l0 ** 2)};
+      });
+      out.push(bestC);
+    });
+  }
+  return out;
+}
+function choose(cands, n, signs){
+  if (!cands.length) return {pick: null, why: 'none'};
+  const byKey = st.pick && cands.find(c => c.key === st.pick);
+  if (byKey) return {pick: byKey, why: 'manual'};
+  if (st.order === 'auto' && n >= 3) {
+    const sorted = [...cands].sort((a, b) => a.rms - b.rms);
+    return {pick: sorted[0], why: 'auto', second: sorted[1]};
+  }
+  if (!st.guess || !st.lc) return {pick: null, why: n < 3 ? 'few' : 'noguess'};
+  const sg = signs.length === 1 ? signs[0] : Math.sign(st.guess);
+  const est = l => sg * Math.abs(st.guess) * (589 ** 2 - L0_FIXED ** 2) / (l ** 2 - L0_FIXED ** 2) * st.lc;
+  let best = null, bd = Infinity;
+  cands.filter(c => c.s === sg).forEach(c => {
+    const d = c.L.reduce((t, l, i) => t + (c.A[i] - est(l)) ** 2, 0);
+    if (d < bd) { bd = d; best = c; }
+  });
+  return {pick: best, why: n < 3 ? 'few-guess' : 'guess'};
+}
+
+// θ → θ + 10°: bands move to shorter λ for dextro (+), longer λ for laevo (−).
+// Sign from Σ (∂T/∂λ)·(T₂ − T₁)·I₀ over the whole spectrum; shift in nm from the dark bands, for display only.
+function rotSense(a1, a2, I0){
+  let acc = 0;
+  for (let i = 1; i < N - 1; i++) {
+    const t0 = a1.Ts[i - 1], t2 = a1.Ts[i + 1], u = a2.Ts[i];
+    if (!fin(t0) || !fin(t2) || !fin(u) || !fin(a1.Ts[i])) continue;
+    acc += (t2 - t0) * (u - a1.Ts[i]) * I0[i];
+  }
+  if (!acc) return null;
+  const s = acc > 0 ? 1 : -1, d = [];
+  a1.ext.filter(e => e.type === 'min').forEach(e => { let b = null;
+    a2.ext.filter(x => x.type === 'min').forEach(x => { if (!b || Math.abs(x.lam - e.lam) < Math.abs(b.lam - e.lam)) b = x; });
+    if (b && Math.sign(e.lam - b.lam) === s) d.push(Math.abs(b.lam - e.lam)); });
+  d.sort((x, y) => x - y);
+  return {s, nm: d.length ? d[d.length >> 1] : null};
+}
+
+/* ---------- import ---------- */
+const imp = {ref: null, sam: null, sam2: null, I0: null, I: null, I2: null};
+function parseTable(text){
+  const rows = [];
+  for (const line of text.split(/\r?\n/)) {
+    const t = line.trim(); if (!t || t[0] === '#') continue;
+    const v = t.split(/[\s,;]+/).filter(x => x !== '').map(Number);
+    if (v.length >= 2 && Number.isFinite(v[0]) && Number.isFinite(v[1])) rows.push(v);
+  }
+  return rows.sort((a, b) => a[0] - b[0]);
+}
+function resample(rows, col){
+  const out = new Array(N).fill(NaN); if (!rows || rows.length < 2) return out;
+  let j = 0;
+  LAM.forEach((l, i) => {
+    if (l < rows[0][0] || l > rows.at(-1)[0]) return;
+    while (j < rows.length - 2 && rows[j + 1][0] < l) j++;
+    const a = rows[j], b = rows[j + 1]; if (!fin(a[col]) || !fin(b[col])) return;
+    out[i] = b[0] === a[0] ? a[col] : a[col] + (b[col] - a[col]) * (l - a[0]) / (b[0] - a[0]);
+  });
+  return out;
+}
+function rebuildImport(){
+  const msgs = [];
+  const desc = (name, r) => `${name} ${r.length} 點（${r[0][0].toFixed(0)}–${r.at(-1)[0].toFixed(0)} nm）`;
+  const three = [imp.sam, imp.ref].find(r => r && r.length > 1 && r[0].length >= 3);
+  imp.I2 = null;
+  if (three) { imp.I0 = resample(three, 1); imp.I = resample(three, 2); if (three[0].length >= 4) imp.I2 = resample(three, 3); msgs.push(desc(three[0].length >= 4 ? '四欄檔' : '三欄檔', three)); }
+  else if (imp.ref && imp.sam) { imp.I0 = resample(imp.ref, 1); imp.I = resample(imp.sam, 1); msgs.push(desc('參考', imp.ref), desc('樣品', imp.sam)); }
+  else { imp.I0 = imp.I = null; if (imp.ref) msgs.push(desc('參考', imp.ref) + '，還缺樣品'); if (imp.sam) msgs.push(desc('樣品', imp.sam) + '，還缺參考'); }
+  if (imp.sam2 && imp.I0) { imp.I2 = resample(imp.sam2, 1); msgs.push(desc('θ + 10°', imp.sam2)); }
+  const all = [imp.ref, imp.sam, imp.sam2].filter(Boolean).flat();
+  let warn = '';
+  if (all.length && (all[0][0] < 250 || all.at(-1)[0] > 1200)) warn = '　第一欄看起來不是波長（nm），請先在分光儀軟體裡做波長校正。';
+  const ready = !!imp.I0;
+  $('radImp').disabled = !ready;
+  if (ready) { document.querySelector('input[name=dsrc][value=imp]').checked = true; st.data = 'imp'; }
+  $('impStatus').innerHTML = (msgs.length ? '已載入：' + msgs.join('；') + '。' : '還沒有匯入資料。') + (warn ? `<span class="warn">${warn}</span>` : '');
+  st.pick = null; update();
+}
+function loadFile(input, slot){
+  const f = input.files[0]; if (!f) { imp[slot] = null; rebuildImport(); return; }
+  f.text().then(t => { const r = parseTable(t); imp[slot] = r.length > 1 ? r : null;
+    if (!imp[slot]) $('impStatus').textContent = `${f.name} 裡找不到數字資料。`; else rebuildImport(); });
+}
+
+/* ---------- compute everything ---------- */
+let M = {};
+function compute(){
+  const sim = simulate();
+  const useImp = st.data === 'imp' && imp.I0;
+  const I0 = useImp ? imp.I0 : sim.I0, I = useImp ? imp.I : sim.I;
+  const an = analyze(I0, I);
+  let signs = [1, -1], sense = null;
+  if (st.sign === 'pos') signs = [1];
+  else if (st.sign === 'neg') signs = [-1];
+  else {
+    const I2 = useImp ? imp.I2 : simulate(st.th + 10, 20261025).I;
+    if (I2) { sense = rotSense(an, analyze(I0, I2, st.th + 10), I0); if (sense) signs = [sense.s]; }
+  }
+  const cands = candidates(an.ext, signs);
+  const ch = choose(cands, an.ext.length, signs);
+  M = {sim, useImp, I0, I, ...an, signs, sense, cands, ch, fit: ch.pick};
+}
+
+/* ---------- charts ---------- */
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function niceTicks(a, b, n){
+  const span = b - a, step0 = span / n, p = 10 ** Math.floor(Math.log10(step0));
+  const step = [1, 2, 2.5, 5, 10].map(k => k * p).find(s => s >= step0);
+  const out = []; for (let v = Math.ceil(a / step) * step; v <= b + 1e-9; v += step) out.push(+v.toFixed(6));
+  return out;
+}
+function setupCanvas(cv){
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)) { cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr); }
+  const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+  return {ctx, w, h};
+}
+const P = {l: 54, r: 14, t: 12, b: 34};
+function axes(ctx, w, h, o, X, Y){
+  const muted = css('--muted'), rule = css('--rule');
+  ctx.font = '11px ' + css('--f-mono'); ctx.lineWidth = 1;
+  ctx.fillStyle = muted; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  niceTicks(o.y[0], o.y[1], o.yTicks || 5).forEach(v => {
+    if (o.grid !== false) { ctx.strokeStyle = rule; ctx.globalAlpha = v === 0 ? 1 : .55; ctx.beginPath(); ctx.moveTo(P.l, Y(v)); ctx.lineTo(w - P.r, Y(v)); ctx.stroke(); ctx.globalAlpha = 1; }
+    ctx.fillText(o.yFmt ? o.yFmt(v) : v, P.l - 6, Y(v));
+  });
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  niceTicks(o.x[0], o.x[1], Math.max(3, Math.floor((w - 70) / 70))).forEach(v => ctx.fillText(v, X(v), h - P.b + 6));
+  ctx.fillText(o.xLabel, (P.l + w - P.r) / 2, h - 14);
+  ctx.save(); ctx.translate(12, (P.t + h - P.b) / 2); ctx.rotate(-Math.PI/2); ctx.fillText(o.yLabel, 0, -6); ctx.restore();
+}
+const charts = [];
+function makeChart(cv, build){
+  const c = {cv, build, hover: null, tip: document.createElement('div')};
+  c.tip.className = 'tip'; c.tip.hidden = true; cv.parentElement.appendChild(c.tip);
+  const move = e => { const r = cv.getBoundingClientRect(); c.hover = e.clientX - r.left; draw(c); };
+  cv.addEventListener('pointermove', move);
+  cv.addEventListener('pointerdown', move);
+  cv.addEventListener('pointerleave', () => { c.hover = null; c.tip.hidden = true; draw(c); });
+  charts.push(c); return c;
+}
+function draw(c){
+  const o = c.build();
+  const {ctx, w, h} = setupCanvas(c.cv);
+  const X = v => P.l + (v - o.x[0]) / (o.x[1] - o.x[0]) * (w - P.l - P.r);
+  const Y = v => h - P.b - (v - o.y[0]) / (o.y[1] - o.y[0]) * (h - P.t - P.b);
+  const ink = css('--ink'), muted = css('--muted'), surf = css('--surface');
+  axes(ctx, w, h, o, X, Y);
+  if (o.empty) { ctx.fillStyle = muted; ctx.font = '13px ' + css('--f-body'); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(o.empty, (P.l + w - P.r) / 2, (P.t + h - P.b) / 2); c.tip.hidden = true; return; }
+  ctx.save(); ctx.beginPath(); ctx.rect(P.l, P.t - 2, w - P.l - P.r, h - P.t - P.b + 4); ctx.clip();
+  (o.vlines || []).forEach(v => { ctx.strokeStyle = muted; ctx.lineWidth = 1; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.moveTo(X(v.x), P.t); ctx.lineTo(X(v.x), h - P.b); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = muted; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(v.label, X(v.x) + 4, P.t + 2); });
+  o.series.forEach(s => {
+    ctx.strokeStyle = s.color; ctx.lineWidth = s.width || 2; ctx.lineJoin = 'round'; ctx.setLineDash(s.dash ? [5, 4] : []);
+    ctx.beginPath(); let pen = false;
+    s.data.forEach(p => { if (!fin(p[1])) { pen = false; return; } pen ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1])); pen = true; });
+    ctx.stroke(); ctx.setLineDash([]);
+  });
+  (o.points || []).forEach(p => { ctx.fillStyle = p.color; ctx.strokeStyle = surf; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(X(p.x), Y(p.y), 5, 0, 7); ctx.fill(); ctx.stroke(); });
+  ctx.restore();
+  if (c.hover != null && c.hover >= P.l && c.hover <= w - P.r) {
+    const xv = o.x[0] + (c.hover - P.l) / (w - P.l - P.r) * (o.x[1] - o.x[0]);
+    const s0 = o.series[0].data; let idx = 0, best = Infinity;
+    s0.forEach((p, i) => { const d = Math.abs(p[0] - xv); if (d < best) { best = d; idx = i; } });
+    const xs = s0[idx][0];
+    ctx.strokeStyle = muted; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X(xs), P.t); ctx.lineTo(X(xs), h - P.b); ctx.stroke();
+    let html = `<b>${o.xFmt(xs)}</b>`;
+    o.series.forEach(s => { const p = s.data[idx]; if (!p || !fin(p[1])) return;
+      ctx.fillStyle = s.color; ctx.strokeStyle = surf; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(X(p[0]), Y(Math.max(o.y[0], Math.min(o.y[1], p[1]))), 4.5, 0, 7); ctx.fill(); ctx.stroke();
+      html += `<div class="r"><i style="background:${s.color}"></i>${s.name}　<b>${s.fmt(p[1])}</b></div>`; });
+    c.tip.innerHTML = html; c.tip.hidden = false;
+    const tw = c.tip.offsetWidth, left = X(xs) + 20 + tw > w ? X(xs) - tw - 6 : X(xs) + 20;
+    c.tip.style.left = left + 'px'; c.tip.style.top = (c.cv.offsetTop + P.t + 28) + 'px';
+  } else c.tip.hidden = true;
+}
+
+const tChart = makeChart($('cvT'), () => {
+  const acc = css('--accent'), ref = css('--ref'), ink = css('--ink');
+  const series = [{name: 'T 量到', data: LAM.map((l, i) => [l, M.T[i]]), color: acc, fmt: v => v.toFixed(3)}];
+  if (!M.useImp) series.push({name: 'T 模型', data: LAM.map((l, i) => [l, M.sim.T[i]]), color: ref, dash: true, width: 1.5, fmt: v => v.toFixed(3)});
+  return {x: [L_MIN, L_MAX], y: [-0.05, 1.12], xLabel: '波長 (nm)', yLabel: 'T = I / I₀', xFmt: v => v + ' nm', yFmt: v => v.toFixed(1), series,
+    points: M.ext.map(e => ({x: e.lam, y: e.T, color: e.type === 'min' ? ink : acc}))};
+});
+const aChart = makeChart($('cvA'), () => {
+  const acc = css('--accent'), ref = css('--ref'), ink = css('--ink');
+  const xr = [400, 700], inR = l => l >= xr[0] && l <= xr[1];
+  const series = [], f = M.fit;
+  if (f) series.push({name: '擬合', data: LAM.filter(inR).map(l => [l, f.K / (l * l - f.l0 * f.l0)]), color: acc, fmt: v => v.toFixed(1) + '°'});
+  if (!M.useImp) series.push({name: '設定', data: LAM.filter(inR).map(l => [l, alphaAt(l)]), color: ref, dash: true, width: 1.5, fmt: v => v.toFixed(1) + '°'});
+  const pts = f ? f.L.map((l, i) => ({x: l, y: f.A[i], color: ink})) : [];
+  const vals = [0, ...series.flatMap(s => s.data.map(p => p[1])), ...pts.map(p => p.y)];
+  let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo || 90) * 0.08;
+  const o = {x: xr, y: [lo - pad, hi + pad], xLabel: '波長 (nm)', yLabel: 'α (°)', xFmt: v => v + ' nm', series, points: pts};
+  if (!series.length) { o.y = [-180, 180]; o.empty = M.ext.length ? '級次無法決定，請輸入估計的 [α]₅₈₉' : '沒有找到暗帶或亮帶'; }
+  return o;
+});
+
+/* ---------- camera strips ---------- */
+const off = document.createElement('canvas');
+function stripImage(vals, gain){
+  off.width = N; off.height = 1;
+  const c = off.getContext('2d'), img = c.createImageData(N, 1);
+  vals.forEach((v, i) => { const rgb = wl2rgb(LAM[i]), k = fin(v) ? Math.pow(Math.max(0, Math.min(1, v * gain)), 0.8) : 0;
+    img.data[i*4] = 255 * rgb[0] * k; img.data[i*4+1] = 255 * rgb[1] * k; img.data[i*4+2] = 255 * rgb[2] * k; img.data[i*4+3] = 255; });
+  c.putImageData(img, 0, 0); return off;
+}
+function drawStrips(){
+  const {ctx, w, h} = setupCanvas($('cvStrips'));
+  const muted = css('--muted'), gain = 1 / (M.mx || 1), sh = (h - 14) / 2;
+  ctx.imageSmoothingEnabled = true;
+  [[M.I0, 'I₀'], [M.I, 'I']].forEach(([arr, lab], k) => {
+    const y = 2 + k * (sh + 10);
+    ctx.drawImage(stripImage(arr, gain), P.l, y, w - P.l - P.r, sh);
+    ctx.fillStyle = muted; ctx.font = '12px ' + css('--f-mono'); ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(lab, P.l - 8, y + sh / 2);
+  });
+}
+
+/* ---------- liquid-height waterfall ---------- */
+function drawWaterfall(){
+  const cv = $('cvWf'), {ctx, w, h} = setupCanvas(cv);
+  const ink = css('--ink'), muted = css('--muted');
+  const S = M.sim.S, rows = 101;
+  off.width = N; off.height = rows;
+  const c = off.getContext('2d'), img = c.createImageData(N, rows);
+  const base = LAM.map(l => st.spec * (589 ** 2 - st.l0 ** 2) / (l ** 2 - st.l0 ** 2) * (st.c / 100) / 10);   // α per cm
+  for (let r = 0; r < rows; r++) {
+    const hh = 100 - r;
+    for (let i = 0; i < N; i++) {
+      const rgb = wl2rgb(LAM[i]), k = Math.pow(S[i] * malus(st.th, base[i] * hh), 0.8), p = (r * N + i) * 4;
+      img.data[p] = 255 * rgb[0] * k; img.data[p+1] = 255 * rgb[1] * k; img.data[p+2] = 255 * rgb[2] * k; img.data[p+3] = 255;
+    }
+  }
+  c.putImageData(img, 0, 0);
+  const o = {x: [L_MIN, L_MAX], y: [0, 100], xLabel: '波長 (nm)', yLabel: '液高 (cm)', yFmt: v => v, grid: false};
+  const X = v => P.l + (v - o.x[0]) / (o.x[1] - o.x[0]) * (w - P.l - P.r);
+  const Y = v => h - P.b - (v - o.y[0]) / (o.y[1] - o.y[0]) * (h - P.t - P.b);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(off, P.l, P.t, w - P.l - P.r, h - P.t - P.b);
+  axes(ctx, w, h, o, X, Y);
+  ctx.strokeStyle = '#fff'; ctx.globalAlpha = .7; ctx.setLineDash([3, 4]); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(X(546), P.t); ctx.lineTo(X(546), h - P.b); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(P.l, Y(st.h)); ctx.lineTo(w - P.r, Y(st.h)); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.font = '11px ' + css('--f-mono'); ctx.textAlign = 'left';
+  const top = Y(st.h) - P.t < 16; ctx.textBaseline = top ? 'top' : 'bottom';
+  ctx.fillText(`液高 ${st.h} cm`, P.l + 6, Y(st.h) + (top ? 4 : -3));
+  ctx.textBaseline = 'top'; ctx.fillText('546 nm', X(546) + 4, P.t + 4);
+  cv._map = y => Math.round(Math.max(0, Math.min(100, (h - P.b - y) / (h - P.t - P.b) * 100)));
+}
+function darkCount(a){
+  // minima while α goes from 0 to a: values α = θ − 90 − 180k strictly beyond 0, up to a
+  const lo = Math.min(0, a), hi = Math.max(0, a); let n = 0;
+  for (let k = -60; k <= 60; k++) { const v = st.th - 90 - 180 * k; if (v > lo && v <= hi && v !== 0) n++; }
+  return n;
+}
+
+/* ---------- light-path diagram ---------- */
+function drawDiagram(){
+  const {ctx, w, h} = setupCanvas($('cvDiagram'));
+  const ink = css('--ink'), muted = css('--muted'), rule = css('--rule'), refc = css('--ref'), liquid = css('--liquid');
+  const small = w < 520, fs = small ? 10.5 : 12;
+  const y = small ? h * 0.36 : h * 0.47, tubeH = Math.min(44, h * 0.15), R = Math.max(13, Math.min(22, w * 0.032));
+  const xLed = w * 0.035, xP1 = Math.max(w * 0.085, R + 8), xT0 = xP1 + 12, xT1 = w * 0.54, xP2 = w * 0.575;
+  const xB0 = w * 0.615, xB1 = w - 4, xG = xB0 + (xB1 - xB0) * 12 / 22, xCam = xB1 - 10;
+  const boxH = Math.min(h * 0.5, (xB1 - xB0) * 13 / 22 * 1.0), sc = (boxH / 2) / 6.5;
+  ctx.font = fs + 'px ' + css('--f-body'); ctx.lineCap = 'round';
+  // beam up to the grating
+  ctx.strokeStyle = refc; ctx.globalAlpha = .35; ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.moveTo(xLed, y); ctx.lineTo(xB0, y); ctx.stroke(); ctx.globalAlpha = 1;
+  // LED
+  ctx.fillStyle = '#f5c842'; ctx.strokeStyle = ink; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(xLed, y, 7, -Math.PI / 2, Math.PI / 2); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillRect(xLed - 9, y - 9, 4, 18);
+  // tube + liquid
+  const tl = xT1 - xT0;
+  ctx.fillStyle = liquid; ctx.fillRect(xT0, y - tubeH / 2, tl * st.h / 100, tubeH);
+  ctx.strokeStyle = ink; ctx.lineWidth = 1.2; ctx.strokeRect(xT0, y - tubeH / 2, tl, tubeH);
+  // plates
+  const plate = x => { ctx.strokeStyle = ink; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y - tubeH * 0.75); ctx.lineTo(x, y + tubeH * 0.75); ctx.stroke(); };
+  plate(xP1); plate(xP2);
+  // face-on polariser icons
+  const cyI = y - tubeH / 2 - R - 26;
+  const ax = (cx, deg, color, width, dash) => { const t = rad(deg), dx = Math.sin(t) * R, dy = -Math.cos(t) * R;
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash || []);
+    ctx.beginPath(); ctx.moveTo(cx - dx, cyI - dy); ctx.lineTo(cx + dx, cyI + dy); ctx.stroke(); ctx.setLineDash([]); };
+  const ring = cx => { ctx.strokeStyle = rule; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cyI, R, 0, 7); ctx.stroke();
+    ctx.strokeStyle = rule; ctx.beginPath(); ctx.moveTo(cx, cyI + R); ctx.lineTo(cx, y - tubeH * 0.75 - 2); ctx.stroke(); };
+  ring(xP1); ax(xP1, 0, ink, 2.2);
+  ring(xP2);
+  [[450, '#3b5bdb'], [550, '#2f9e44'], [650, '#e03131']].forEach(([l, col]) => ax(xP2, alphaAt(l), col, 2.2));
+  ax(xP2, st.th, ink, 1.4, [4, 4]);
+  ctx.fillStyle = muted; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillText('起偏 0°', xP1, cyI - R - 4); ctx.fillText(`檢偏 ${st.th}°`, xP2, cyI - R - 4);
+  // tube labels
+  ctx.textBaseline = 'top'; ctx.fillStyle = ink;
+  ctx.fillText(small ? `液高 ${st.h} cm` : `旋光管 100 cm · 液高 ${st.h} cm`, (xT0 + xT1) / 2, y + tubeH / 2 + 10);
+  ctx.fillStyle = muted;
+  ctx.fillText(`${SUBNAME[st.sub]} ${st.c} g/100 mL`, (xT0 + xT1) / 2, y + tubeH / 2 + 10 + fs * 1.6);
+  ctx.textAlign = 'left'; ctx.font = (fs - 0.5) + 'px ' + css('--f-mono');
+  [[450, '#3b5bdb'], [550, '#2f9e44'], [650, '#e03131']].forEach(([l, col], i) => {
+    const yy = small ? y + tubeH / 2 + 18 + fs * 3.4 + i * (fs + 6) : cyI - R + 2 + i * (fs + 4), xx = small ? 4 : xP1 + R + 14;
+    ctx.fillStyle = col; ctx.fillRect(xx, yy - 1, 12, 3);
+    ctx.fillStyle = ink; ctx.textBaseline = 'middle'; ctx.fillText(`${l} nm  α = ${alphaAt(l).toFixed(0)}°`, xx + 18, yy);
+  });
+  ctx.font = fs + 'px ' + css('--f-body');
+  // spectrometer box
+  const bt = y - boxH / 2, bb = y + boxH / 2;
+  ctx.strokeStyle = ink; ctx.lineWidth = 1.2; ctx.strokeRect(xB0, bt, xB1 - xB0, boxH);
+  ctx.strokeStyle = css('--surface'); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(xB0, y - 3); ctx.lineTo(xB0, y + 3); ctx.stroke();
+  ctx.strokeStyle = '#2f9e44'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(xG, bt + 3); ctx.lineTo(xG, bb - 3); ctx.stroke();
+  ctx.fillStyle = ink; ctx.fillRect(xCam - 4, y - 9, 10, 18);
+  // diffracted rays that reach the camera
+  const d = GR[st.gr];
+  [450, 500, 550, 600, 650].forEach(l => {
+    const tb = tbOf(l, d); if (tb == null) return;
+    const gy = y - lamTb(tb, d).g * sc; if (gy > bb - 2) return;
+    const [r, g, b] = wl2rgb(l);
+    ctx.strokeStyle = `rgb(${r*255|0},${g*255|0},${b*255|0})`; ctx.lineWidth = 1.4; ctx.globalAlpha = .9;
+    ctx.beginPath(); ctx.moveTo(xB0, y); ctx.lineTo(xG, gy); ctx.lineTo(xCam - 4, y); ctx.stroke(); ctx.globalAlpha = 1;
+  });
+  ctx.fillStyle = muted; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  if (!small) ctx.fillText(`狹縫 ${st.slit.toFixed(2)} mm`, xB0, bb + 6);
+  ctx.fillText(st.gr === 'dvd' ? 'DVD' : st.gr === 'cd' ? 'CD' : '光柵', xG, bb + 6);
+  ctx.textAlign = 'right'; ctx.fillText('webcam', xB1, bb + 6 + fs * 1.6);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(small ? '分光儀' : 'DVD 光柵分光儀 22 × 13 cm', (xB0 + xB1) / 2, bt - 6);
+  ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+  ctx.fillText(small ? '實際是直立擺放：LED 在下，狹縫朝下對準管口。' : '實際是直立擺放：LED 在最下面，分光儀立起來，狹縫朝下對準管口的第二偏光片。', 2, h - 4);
+}
+
+/* ---------- readouts ---------- */
+const sgn = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(1);
+function readouts(){
+  $('guessBox').classList.toggle('hidden', st.order !== 'guess' && !(M.ext.length && M.ext.length < 3));
+  const f = M.fit, nMin = M.ext.filter(e => e.type === 'min').length, nMax = M.ext.length - nMin;
+  $('tExt').innerHTML = `${nMin}<small>暗</small> ${nMax}<small>亮</small>`;
+  const vis = M.T.map((t, i) => t != null ? LAM[i] : null).filter(fin);
+  $('tExtS').textContent = vis.length ? `可分析 ${vis[0].toFixed(0)}–${vis.at(-1).toFixed(0)} nm` : '沒有足夠的光';
+  const k546 = KER[LAM.indexOf(546)];
+  $('tFwhm').innerHTML = k546 ? `${k546.fwhm.toFixed(1)}<small>nm</small>` : '—';
+  // narrowest half-period in the analysed band (from extremes, or from the model when simulating)
+  let half = null;
+  if (!M.useImp && vis.length) { const l = vis[0], da = Math.abs(alphaAt(l + 0.5) - alphaAt(l - 0.5)); half = da > 0 ? 90 / da : null; }
+  else if (M.ext.length > 1) { const s = M.ext.map(e => e.lam).sort((a, b) => a - b); half = Math.min(...s.slice(1).map((v, i) => v - s[i])); }
+  if (half == null || !k546) $('tFwhmS').textContent = '';
+  else { const kv = KER.find((k, i) => k && LAM[i] >= vis[0]); const ratio = half / (kv ? kv.fwhm : k546.fwhm);
+    $('tFwhmS').innerHTML = `最密半週期 ${half.toFixed(1)} nm · ` + (ratio > 2 ? '分得開' : ratio > 1 ? '對比下降' : '<span class="warn">太密，糊掉</span>'); }
+  if (f) {
+    $('tSign').innerHTML = f.s > 0 ? '右旋<small>+</small>' : '左旋<small>−</small>';
+    const why = M.ch.why;
+    $('tSignS').textContent = M.signs.length > 1 ? '未判定：兩種旋向都試了，不可靠'
+      : st.sign !== 'shift' ? '手動指定'
+      : `θ + 10° 時暗帶往${M.sense.s > 0 ? '藍' : '紅'}移` + (M.sense.nm != null ? ` ${M.sense.nm.toFixed(1)} nm` : '');
+    if (M.signs.length > 1) $('tSign').innerHTML += '<small>?</small>';
+    const spec = st.lc > 0 ? f.K / (589 ** 2 - f.l0 ** 2) / st.lc : null;
+    $('tSpec').innerHTML = spec != null ? `${sgn(spec)}<small>°</small>` : '—';
+    $('tSpecS').textContent = M.useImp ? `以 c = ${st.c} g/100 mL、l = ${st.h} cm 換算` : `設定 ${sgn(st.spec)}°`;
+    $('tL0').innerHTML = `${f.l0}<small>nm</small>`;
+    $('tL0S').textContent = M.ext.length < 3 ? '極值太少，固定 160 nm' : M.useImp ? '' : `設定 ${st.l0} nm`;
+    $('t546').innerHTML = `${sgn(f.a546)}<small>°</small>`;
+    $('t546S').textContent = M.useImp ? '' : `設定 ${sgn(alphaAt(546))}°`;
+  } else {
+    ['tSign', 'tSpec', 'tL0', 't546'].forEach(id => $(id).innerHTML = '—');
+    $('tSignS').textContent = M.ext.length ? '需要估計值' : '';
+    if (M.ext.length && M.signs.length === 1) $('tSign').innerHTML = M.signs[0] > 0 ? '右旋<small>+</small>' : '左旋<small>−</small>';
+    $('tSpecS').textContent = $('tL0S').textContent = $('t546S').textContent = '';
+  }
+  $('roSpec').textContent = $('tSpec').textContent; $('ro546').textContent = $('t546').textContent;
+  $('roSign').textContent = $('tSign').textContent;
+  // candidate table
+  const sorted = [...M.cands].sort((a, b) => a.rms - b.rms);
+  let rows = sorted.slice(0, 6); if (f && !rows.includes(f)) rows.push(f);
+  $('tblCand').tBodies[0].innerHTML = rows.map(c => {
+    const spec = st.lc > 0 ? sgn(c.K / (589 ** 2 - c.l0 ** 2) / st.lc) : '—';
+    return `<tr data-key="${c.key}" class="${c === f ? 'sel' : ''}"><td>${c.s > 0 ? '右旋' : '左旋'}</td><td>${sgn(c.a546)}°</td><td>${spec}°</td><td>${c.l0}</td><td>${c.rms.toFixed(2)}°</td></tr>`;
+  }).join('') || '<tr><td colspan="5" class="muted" style="font-family:var(--f-body)">沒有極值可以分析。</td></tr>';
+  const n = M.ext.length;
+  $('capCand').textContent = !n ? '光譜上沒有暗帶或亮帶。增加濃度或液高，或者轉一下檢偏器。'
+    : n < 3 ? '極值少於三個，形狀擬合分不出級次。用估計值，或用液高掃描數暗的次數。'
+    : M.signs.length > 1 ? '沒有判定旋向。左右旋各有一組幾乎一樣好的解。請匯入 θ + 10° 的光譜，或在上面直接選旋向。'
+    : M.ch.why === 'auto' && M.ch.second && M.ch.second.rms < 2 * f.rms ? '最佳和次佳的殘差很接近，結果不可靠。用液高掃描確認。'
+    : '殘差最小的一列就是答案。錯一級時，α 整體差 180°，Drude 曲線就擬合不好。';
+  // spectrum notes
+  $('specNote').textContent = M.useImp ? '匯入的實測資料。' : `模擬：參考是清水、偏光片平行；樣品是目前的 θ。雜訊 ${st.noise.toFixed(1)}%。`;
+  const dir = st.spec * st.c * st.h;
+  $('capDir').textContent = M.useImp ? '轉檢偏器時，暗帶往藍邊移是右旋，往紅邊移是左旋。'
+    : dir === 0 ? '目前沒有旋光。' : `θ 增加時，暗帶往${dir > 0 ? '藍' : '紅'}邊移（${dir > 0 ? '右旋' : '左旋'}）。這是判斷旋向最簡單的方法。`;
+  const a546 = alphaAt(546), nd = darkCount(a546);
+  $('capWf').textContent = `從空管加到 ${st.h} cm，546 nm 處會變暗 ${nd} 次，α₅₄₆ = ${sgn(a546)}°。數暗的次數就能知道 α 落在哪一個 180° 區段。濃度越高、波長越短，暗帶越密。`;
+  $('lgTm').classList.toggle('hidden', M.useImp); $('lgAm').classList.toggle('hidden', M.useImp);
+}
+
+function renderAll(){ drawDiagram(); drawStrips(); drawWaterfall(); charts.forEach(draw); }
+function updateNow(){ readState(); buildKernel(); compute(); readouts(); renderAll(); }
+// slow phones: run at most one full update per animation frame while a slider is dragged
+let pending = false;
+function update(){ if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; updateNow(); }); }
+
+const ctlIds = ['selSub', 'numSpec', 'rngC', 'rngH', 'rngT', 'selSrc', 'selGr', 'rngSlit', 'rngL0', 'rngNoise', 'selOrder', 'numGuess', 'selSign'];
+ctlIds.forEach(id => $(id).addEventListener('input', () => { st.pick = null; update(); }));
+document.querySelectorAll('[data-theta]').forEach(b => b.addEventListener('click', () => { $('rngT').value = b.dataset.theta; st.pick = null; update(); }));
+document.querySelectorAll('input[name=dsrc]').forEach(r => r.addEventListener('change', () => { st.data = r.value; st.pick = null; update(); }));
+$('tblCand').addEventListener('click', e => { const tr = e.target.closest('tr[data-key]'); if (tr) { st.pick = tr.dataset.key; update(); } });
+$('fRef').addEventListener('change', e => loadFile(e.target, 'ref'));
+$('fSam').addEventListener('change', e => loadFile(e.target, 'sam'));
+$('fSam2').addEventListener('change', e => loadFile(e.target, 'sam2'));
+// the experimenter knows which sugar went in: use its handbook value as the order estimate
+$('selSub').addEventListener('input', () => { $('numGuess').value = st.sub === 'custom' ? st.spec : SUBS[st.sub]; update(); });
+const wf = $('cvWf');
+wf.addEventListener('click', e => { const r = wf.getBoundingClientRect(); $('rngH').value = wf._map(e.clientY - r.top); st.pick = null; update(); });
+$('btnCsv').addEventListener('click', () => {
+  const s = M.sim, s2 = simulate(st.th + 10, 20261025), rows = ['lambda_nm,I0_ref,I_sample,I_sample_theta_plus_10'];
+  LAM.forEach((l, i) => { if (KER[i]) rows.push([l, s.I0[i].toFixed(5), s.I[i].toFixed(5), s2.I[i].toFixed(5)].join(',')); });
+  const meta = `# simulated ${st.sub} [a]589=${st.spec} c=${st.c}g/100mL l=${st.h}cm theta=${st.th}deg lambda0=${st.l0}nm grating=${st.gr} slit=${st.slit}mm noise=${st.noise}%\n`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([meta + rows.join('\n')], {type: 'text/csv'}));
+  a.download = `channeled_${st.sub}_c${st.c}_h${st.h}_th${st.th}.csv`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+let lastW = innerWidth;
+window.addEventListener('resize', () => { if (innerWidth !== lastW) { lastW = innerWidth; renderAll(); } });   // ignore the address bar showing/hiding
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderAll);
+updateNow();
+</script>
+</body>
+</html>

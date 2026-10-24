@@ -6,6 +6,7 @@
 |---|---|---|
 | DVD 光柵分光儀 | https://jim168lab.github.io/spectrometer/ | `index.html` |
 | 一公尺旋光管 | https://jim168lab.github.io/spectrometer/optical_rotation/ | `optical_rotation/index.html` |
+| 旋光管＋分光儀聯合實驗 | https://jim168lab.github.io/spectrometer/combined/ | `combined/index.html` |
 
 ## DVD 光柵分光儀
 
@@ -21,8 +22,16 @@
 - 可調：溶液（果糖、水、蔗糖、葡萄糖、蜂蜜、自訂）、濃度、液高、第二偏光片角度、LED 色溫
 - 可看：旋光角、觀測點 RGB 值、相機畫面，以及 RGB 對偏光片角度、液高、濃度的變化曲線
 
+## 旋光管＋分光儀聯合實驗
+
+分光儀的狹縫架在旋光管出口，記錄整條光譜。旋光角很大時，光譜上會出現暗帶（通道光譜），從暗帶位置算出各波長的旋光角，再擬合比旋光度 [α]₅₈₉ 和 Drude λ₀。
+
+- 可調：溶液、濃度、液高、檢偏器角度、光源、光柵、狹縫寬度、雜訊
+- 可看：相機光譜條、穿透率 T(λ) 與找到的暗帶／亮帶、α(λ) 擬合、級次候選、光譜對液高的變化
+- 可匯入實測光譜（CSV／TXT），把檢偏器轉 +10° 再拍一張，就能判斷左旋或右旋
+
 ## 給 review 的人
 
-- 每個模型都是單一 HTML 檔，three.js 已內嵌，不需要安裝任何東西。
+- 每個模型都是單一 HTML 檔，three.js 已內嵌（聯合實驗頁不需要 three.js），不需要安裝任何東西。
 - 手機上 3D 模型預設鎖定，點「點一下操作 3D 模型」才能旋轉，點模型外面會再鎖回去。
 - 意見請到 **Issues** 開議題，或在 commit 頁面的程式碼行旁留言。
