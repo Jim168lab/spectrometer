@@ -7,6 +7,7 @@
 | DVD 光柵分光儀 | https://jim168lab.github.io/spectrometer/ | `index.html` |
 | 一公尺旋光管 | https://jim168lab.github.io/spectrometer/optical_rotation/ | `optical_rotation/index.html` |
 | 旋光管＋分光儀聯合實驗 | https://jim168lab.github.io/spectrometer/combined/ | `combined/index.html` |
+| 光譜與旋光科展評析 | https://jim168lab.github.io/spectrometer/review/ | `review/index.html` |
 
 ## DVD 光柵分光儀
 

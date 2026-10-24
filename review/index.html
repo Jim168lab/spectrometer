@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>光譜與旋光科展評析</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@600;800&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: single reading column like a lab review sheet; a calibrated spectrum strip as the masthead; one section per entry with severity-tagged findings */
+:root {
+  --bg: #f5f6f8;
+  --paper: #ffffff;
+  --ink: #1b2130;
+  --muted: #5a6274;
+  --rule: #dde1e8;
+  --accent: #3a4fb8;
+  --accent-soft: #e7eafa;
+  --sev-high: #b3261e;
+  --sev-high-bg: #fbe9e7;
+  --sev-mid: #8a5a00;
+  --sev-mid-bg: #fdf1d8;
+  --sev-low: #4a5568;
+  --sev-low-bg: #eceff3;
+  --good: #1f6f43;
+  --font-display: "Noto Serif TC", "Songti TC", "PMingLiU", serif;
+  --font-body: "Noto Sans TC", "Microsoft JhengHei", "PingFang TC", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12151c; --paper: #1a1e28; --ink: #e6e8ee; --muted: #a0a7b6; --rule: #2d3341;
+    --accent: #9aa8ff; --accent-soft: #252c4a;
+    --sev-high: #ff8a80; --sev-high-bg: #3a1c1a; --sev-mid: #f0c060; --sev-mid-bg: #352a12;
+    --sev-low: #b8c0cc; --sev-low-bg: #262b36; --good: #7fd4a2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12151c; --paper: #1a1e28; --ink: #e6e8ee; --muted: #a0a7b6; --rule: #2d3341;
+  --accent: #9aa8ff; --accent-soft: #252c4a;
+  --sev-high: #ff8a80; --sev-high-bg: #3a1c1a; --sev-mid: #f0c060; --sev-mid-bg: #352a12;
+  --sev-low: #b8c0cc; --sev-low-bg: #262b36; --good: #7fd4a2;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.75; }
+.wrap { max-width: 860px; margin: 0 auto; padding-block: 40px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 40px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.35; margin: 0; }
+h1 { font-size: clamp(1.8rem, 4.5vw, 2.5rem); font-weight: 800; }
+h2 { font-size: 1.5rem; font-weight: 800; }
+h3 { font-size: 1.1rem; font-weight: 600; }
+p { margin: 0; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.eyebrow { font-family: var(--font-mono); font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+header { display: grid; gap: 16px; }
+.lede { color: var(--muted); max-width: 65ch; }
+
+/* spectrum strip */
+.spectrum { display: grid; gap: 6px; }
+.strip { position: relative; height: 34px; border-radius: 4px; background: linear-gradient(90deg, #4b0082 0%, #3a1fd6 12%, #0047ff 22%, #00a8e0 32%, #00c060 42%, #9fdc00 50%, #ffe000 53%, #ff9a00 60%, #ff3b00 68%, #c00000 82%, #500000 100%); }
+.mark { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); transform: translateX(-1px); }
+.marks-labels { position: relative; height: 3.4em; font-family: var(--font-mono); font-size: .7rem; color: var(--muted); }
+.marks-labels span { position: absolute; transform: translateX(-50%); white-space: nowrap; line-height: 1.3; text-align: center; }
+.marks-labels span.lo { top: 1.7em; }
+.axis { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: .7rem; color: var(--muted); }
+
+.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.summary .item { background: var(--paper); border: 1px solid var(--rule); border-radius: 6px; padding: 14px 16px; display: grid; gap: 4px; min-width: 0; }
+.summary .item b { font-family: var(--font-display); font-size: 1.05rem; }
+.summary .item .counts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+@media (max-width: 640px) { .summary { grid-template-columns: 1fr; } }
+
+.chip { display: inline-block; font-size: .75rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; letter-spacing: .04em; white-space: nowrap; }
+.chip.high { color: var(--sev-high); background: var(--sev-high-bg); }
+.chip.mid { color: var(--sev-mid); background: var(--sev-mid-bg); }
+.chip.low { color: var(--sev-low); background: var(--sev-low-bg); }
+
+section.entry { display: grid; gap: 20px; border-top: 2px solid var(--ink); padding-top: 24px; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: .88rem; color: var(--muted); }
+.meta .mono { color: var(--ink); }
+.method { background: var(--accent-soft); border-radius: 6px; padding: 12px 16px; font-size: .95rem; }
+
+.findings { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; }
+.finding { display: grid; grid-template-columns: 4.6em minmax(0, 1fr); gap: 4px 14px; }
+.finding .chip { justify-self: start; margin-top: 4px; }
+.finding .body { display: grid; gap: 8px; min-width: 0; }
+.finding ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+@media (max-width: 480px) { .finding { grid-template-columns: 1fr; } }
+
+.vs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; font-size: .92rem; }
+.vs > div { border: 1px solid var(--rule); border-radius: 6px; padding: 8px 12px; background: var(--paper); min-width: 0; }
+.vs .lbl { font-size: .75rem; font-weight: 700; letter-spacing: .06em; }
+.vs .bad .lbl { color: var(--sev-high); }
+.vs .ok .lbl { color: var(--good); }
+@media (max-width: 480px) { .vs { grid-template-columns: 1fr; } }
+
+.tablebox { overflow-x: auto; border: 1px solid var(--rule); border-radius: 6px; background: var(--paper); }
+table { border-collapse: collapse; width: 100%; font-size: .9rem; font-variant-numeric: tabular-nums; }
+caption { caption-side: bottom; text-align: left; padding: 8px 12px; font-size: .8rem; color: var(--muted); }
+th, td { padding: 7px 12px; border-bottom: 1px solid var(--rule); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+thead th { font-weight: 700; font-size: .82rem; color: var(--muted); background: var(--bg); }
+td.off { color: var(--sev-high); font-weight: 500; }
+td.num { font-family: var(--font-mono); }
+
+.list-plain { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.advice { background: var(--paper); border: 1px solid var(--rule); border-left: 4px solid var(--good); border-radius: 6px; padding: 16px 20px; display: grid; gap: 10px; }
+footer { font-size: .85rem; color: var(--muted); display: grid; gap: 10px; border-top: 1px solid var(--rule); padding-top: 20px; }
+footer ul { margin: 0; padding-left: 1.2em; }
+</style>
+<style>*,*::before,*::after{box-sizing:border-box}body{margin:0}img{max-width:100%}</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header>
+  <span class="eyebrow">全國中小學科展 · 作品評析</span>
+  <h1>光譜儀與糖水旋光性科展作品評析</h1>
+  <p class="lede">逐篇檢查三件全國科展作品說明書，找出物理錯誤和實驗設計上的漏洞。理論值以文獻比旋光度與光柵方程式估算，只到約略的數量級，未重做實驗。</p>
+
+  <div class="spectrum" aria-label="本報告提到的特徵波長位置">
+    <div class="strip">
+      <i class="mark" style="left:14%"></i>
+      <i class="mark" style="left:23%"></i>
+      <i class="mark" style="left:38%"></i>
+      <i class="mark" style="left:41.5%"></i>
+      <i class="mark" style="left:52.3%"></i>
+      <i class="mark" style="left:57.75%"></i>
+      <i class="mark" style="left:63%"></i>
+    </div>
+    <div class="marks-labels">
+      <span style="left:14%">Hg 435.8</span>
+      <span class="lo" style="left:23%">藍光 LED 472</span>
+      <span style="left:38%">雷射 532</span>
+      <span class="lo" style="left:43%">Hg 546.1</span>
+      <span style="left:52.3%">Na D 589.3</span>
+      <span class="lo" style="left:58%">Eu 611</span>
+      <span style="left:65%">紅光 LED 632</span>
+    </div>
+    <div class="axis"><span>380 nm</span><span>480</span><span>580</span><span>680</span><span>780 nm</span></div>
+  </div>
+</header>
+
+<div class="summary">
+  <div class="item">
+    <span class="eyebrow">第 52 屆 · 國中</span>
+    <b>微小旋光計</b>
+    <div class="counts"><span class="chip high">嚴重 3</span><span class="chip mid">不周延 5</span></div>
+  </div>
+  <div class="item">
+    <span class="eyebrow">第 56 屆 · 高中</span>
+    <b>自製光譜儀完全攻略</b>
+    <div class="counts"><span class="chip high">嚴重 2</span><span class="chip mid">不周延 1</span><span class="chip low">小錯 2</span></div>
+  </div>
+  <div class="item">
+    <span class="eyebrow">第 48 屆 · 高中</span>
+    <b>察「焰」觀「色」</b>
+    <div class="counts"><span class="chip high">嚴重 1</span><span class="chip mid">不周延 2</span><span class="chip low">小錯 4</span></div>
+  </div>
+</div>
+
+<!-- 1 -->
+<section class="entry" id="polarimeter">
+  <div style="display:grid;gap:8px">
+    <span class="eyebrow">糖水旋光性</span>
+    <h2>微小旋光計</h2>
+    <div class="meta"><span>第 52 屆國中組 · 生活與應用科學科 · 佳作</span><span>編號 <span class="mono">030819</span></span><a href="https://twsf.ntsec.gov.tw/activity/race-1/52/pdf/030819.pdf" target="_blank" rel="noopener">作品說明書 PDF</a></div>
+  </div>
+  <p class="method">用紅光 LED（632 nm）和藍光 LED（472 nm）照射，再用自動旋轉盤找出透光最強的角度。測量的糖是蔗糖、葡萄糖、半乳糖和果糖，濃度 15 和 30 g/100 mL，光程 6 和 9 cm。</p>
+
+  <ol class="findings">
+    <li class="finding">
+      <span class="chip high">嚴重</span>
+      <div class="body">
+        <h3>紅光、藍光哪個轉得多，結論說反了</h3>
+        <div class="vs">
+          <div class="bad"><div class="lbl">報告寫的</div>光源波長愈長，旋光角也愈大，紅光的旋光角比藍光大。</div>
+          <div class="ok"><div class="lbl">應為</div>旋光角大約和波長平方成反比。472 nm 藍光的旋光角約是 632 nm 紅光的 1.8 倍。</div>
+        </div>
+        <p>它的 Δα（紅光減藍光的角度差）的正負號和後續結論，也跟著錯了。</p>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip high">嚴重</span>
+      <div class="body">
+        <h3>測出的角度約是理論值的 2～3 倍，看起來沒有扣掉零點</h3>
+        <div class="tablebox">
+          <table>
+            <thead><tr><th>糖（光程 9 cm）</th><th>紅光 15%<br>理論</th><th>紅光 15%<br>報告</th><th>紅光 30%<br>理論</th><th>紅光 30%<br>報告</th><th>藍光 30%<br>理論</th><th>藍光 30%<br>報告</th></tr></thead>
+            <tbody>
+              <tr><td>蔗糖</td><td class="num">+7.8°</td><td class="num off">22°</td><td class="num">+15.6°</td><td class="num off">36°</td><td class="num">+28.0°</td><td class="num">27°</td></tr>
+              <tr><td>葡萄糖</td><td class="num">+6.2°</td><td class="num off">22°</td><td class="num">+12.4°</td><td class="num off">37°</td><td class="num">+22.2°</td><td class="num">28°</td></tr>
+              <tr><td>半乳糖</td><td class="num">+9.4°</td><td class="num off">20°</td><td class="num">+18.8°</td><td class="num off">30°</td><td class="num">+33.8°</td><td class="num">28°</td></tr>
+              <tr><td>果糖</td><td class="num">−10.8°</td><td class="num off">−16°</td><td class="num">−21.7°</td><td class="num off">−28°</td><td class="num">−38.9°</td><td class="num">−36°</td></tr>
+            </tbody>
+            <caption>理論值用鈉 D 線比旋光度（蔗糖 +66.5、葡萄糖 +52.7、半乳糖 +80.2、果糖 −92.4，平衡態）乘上 (589.3/λ)² 估算，只是近似。</caption>
+          </table>
+        </div>
+        <ul>
+          <li>葡萄糖的比旋光度最小、半乳糖最大，報告的數據卻是葡萄糖最大。</li>
+          <li>濃度加倍時，角度應該剛好加倍，但 22 只變 36、20 只變 30。</li>
+          <li>光程從 6 cm 變 9 cm，角度應該是 1.5 倍，實測卻在 1.29 到 1.75 倍之間跳動。</li>
+          <li>把各組數據往回推到濃度或光程為零，角度都不是 0。這代表儀器有固定的零點偏差，而報告沒有用純水做空白校正。</li>
+        </ul>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip high">嚴重</span>
+      <div class="body">
+        <h3>用鏡子反射加長光程，物理上行不通</h3>
+        <p>糖這類天然旋光物質，光走下去、反射後再走回來，旋轉量大致會互相抵消。這是天然旋光和法拉第效應最主要的差別。</p>
+        <div class="tablebox">
+          <table>
+            <thead><tr><th>蔗糖 30 g/100 mL，9 cm</th><th>無反射</th><th>一次反射</th><th>三次反射</th></tr></thead>
+            <tbody>
+              <tr><td>報告值</td><td class="num">36°</td><td class="num off">35°</td><td class="num off">35°</td></tr>
+              <tr><td>物理預期</td><td class="num">約 +15°</td><td class="num">接近 0°</td><td class="num">接近 0°</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>這組數據反而支持上一點：量到的主要是儀器的零點偏差，不是溶液真的旋光。所以「光反射並不影響旋光角」這個結論不成立。</p>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip mid">不周延</span>
+      <div class="body">
+        <h3>「偏振片轉 27° 量藍光、轉 36° 量紅光」不成立</h3>
+        <p>檢偏片轉到任何角度，所有顏色的光都會依馬呂斯定律（I∝cos²θ）一起透過。9° 的角度差只造成約 2% 的強度差，沒辦法用來分辨顏色或做比色。</p>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip mid">不周延</span>
+      <div class="body">
+        <h3>溫度實驗沒有自己做</h3>
+        <p>研究五直接引用別人的結果，也沒有數據。「低溫旋光度較強」並不適用所有糖，果糖的溫度效應就和蔗糖差很多。</p>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip mid">不周延</span>
+      <div class="body">
+        <h3>沒有考慮葡萄糖變旋</h3>
+        <p>用的是無水葡萄糖（α 型），剛溶解時比旋光度約 +112°，要放幾小時才會穩定在 +52.7°。報告沒說溶解後等了多久才測。</p>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip mid">不周延</span>
+      <div class="body">
+        <h3>讀角方式誤差大，也沒有重複測量</h3>
+        <ul>
+          <li>只抓「最大光強度」的角度。cos² 曲線在峰值附近非常平，讀角誤差大，應該擬合整條曲線或改用消光法。</li>
+          <li>每個條件只有一筆數據，沒有重複測量，也沒有誤差範圍。</li>
+        </ul>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip mid">不周延</span>
+      <div class="body">
+        <h3>原理敘述有誤</h3>
+        <ul>
+          <li>「偏振片像柵欄，只讓與柵欄平行的光通過」是常見的錯誤比喻。線柵型偏振片的透光方向，其實和柵條垂直。</li>
+          <li>鈉 D 線通常寫 589.3 nm（雙線平均值），報告寫的 589.6 nm 只是其中一條 D1 線。</li>
+          <li>比旋光度應該註明溫度（20°C）和單位（°·mL·g⁻¹·dm⁻¹）。</li>
+        </ul>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<!-- 2 -->
+<section class="entry" id="spectrometer">
+  <div style="display:grid;gap:8px">
+    <span class="eyebrow">光譜儀</span>
+    <h2>自製光譜儀完全攻略</h2>
+    <div class="meta"><span>第 56 屆高中組 · 電腦與資訊學科</span><span>編號 <span class="mono">052509</span></span><a href="https://twsf.ntsec.gov.tw/activity/race-1/56/pdf/052509.pdf" target="_blank" rel="noopener">作品說明書 PDF</a></div>
+  </div>
+  <p class="method">用 DVD-R 光柵加網路攝影機，配合 VB.Net 和 EmguCV 自己寫分析程式，再拿硫酸銅溶液和專業光譜儀（T80）比對。</p>
+
+  <ol class="findings">
+    <li class="finding">
+      <span class="chip high">嚴重</span>
+      <div class="body">
+        <h3>光柵方程式算錯</h3>
+        <p>報告中「入射角 14°、1000 條/mm」的範例用的公式是對的，但「表格 1」實際用的是 sinβ = (λ/d)·cosα − sinα，多乘了一個 cosα。表格裡特地列了一欄 cos 值，就是證據。</p>
+        <div class="tablebox">
+          <table>
+            <thead><tr><th>光柵角 α</th><th>繞射角 β<br>報告</th><th>繞射角 β<br>正確</th><th>水平繞射角<br>報告</th><th>水平繞射角<br>正確</th></tr></thead>
+            <tbody>
+              <tr><td class="num">0°</td><td class="num">48.0°</td><td class="num">48.0°</td><td class="num">48.0°</td><td class="num">48.0°</td></tr>
+              <tr><td class="num">10°</td><td class="num off">33.9°</td><td class="num">34.7°</td><td class="num off">43.9°</td><td class="num">44.7°</td></tr>
+              <tr><td class="num">20°</td><td class="num off">20.9°</td><td class="num">23.7°</td><td class="num off">40.9°</td><td class="num">43.7°</td></tr>
+              <tr><td class="num">30°</td><td class="num off">8.3°</td><td class="num">14.1°</td><td class="num off">38.3°</td><td class="num">44.1°</td></tr>
+              <tr><td class="num">40°</td><td class="num off">−4.2°</td><td class="num">5.8°</td><td class="num off">35.8°</td><td class="num">45.8°</td></tr>
+              <tr><td class="num">50°</td><td class="num off">−16.8°</td><td class="num">−1.3°</td><td class="num off">33.2°</td><td class="num">48.7°</td></tr>
+              <tr><td class="num">60°</td><td class="num off">−29.6°</td><td class="num">−7.1°</td><td class="num off">30.4°</td><td class="num">52.9°</td></tr>
+            </tbody>
+            <caption>DVD 軌距 d = 740 nm，λ = 550 nm，一級繞射：sinβ = λ/d − sinα。</caption>
+          </table>
+        </div>
+        <p>要讓繞射角為 0，光柵應轉 48.0°，報告寫 36.6°。所幸最佳角度是靠實驗逐一掃描找出來的，影響有限，但原理段落需要更正。</p>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip high">嚴重</span>
+      <div class="body">
+        <h3>用相機測吸光度，沒有處理非線性問題</h3>
+        <ul>
+          <li>網路攝影機會自動曝光、自動白平衡，也有 gamma 校正，像素值和真實光強度不成正比。報告沒說有鎖定這些設定，透光率和吸光度的計算因此有系統誤差。</li>
+          <li>硫酸銅的吸收峰在約 800 nm，已經在網路攝影機靈敏度的邊緣。</li>
+          <li>和 T80 的比對只寫「相似度還蠻高的」，沒有量化誤差，也沒檢驗吸光度和濃度是否呈線性（比爾定律）。</li>
+        </ul>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip mid">不周延</span>
+      <div class="body">
+        <h3>波長校正不夠嚴謹</h3>
+        <ul>
+          <li>只用 436 nm 和 611 nm 兩點做「等比例」線性換算。光柵的色散本來就不是線性的，鏡頭也有畸變，應該多取幾條譜線再做多項式擬合。</li>
+          <li>用來驗證的紅光雷射筆，標示的 660 nm 本身就有約 ±5～10 nm 的出廠誤差。量到 659.6 nm 只能說「一致」，不能證明精度到 0.4 nm。</li>
+          <li>報告沒有評估解析度（譜線的半高寬）。</li>
+        </ul>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip low">小錯</span>
+      <div class="body">
+        <h3>光柵線條密度和解析度混為一談</h3>
+        <p>「線條越密集的光柵分光效果越好」只說對一半：線條密度決定色散角，解析度則取決於被照到的總線數。</p>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip low">小錯</span>
+      <div class="body">
+        <h3>狹縫的作用說錯</h3>
+        <p>「狹縫只讓平行光入射」不正確，狹縫本身不能讓光變平行。</p>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<!-- 3 -->
+<section class="entry" id="flame">
+  <div style="display:grid;gap:8px">
+    <span class="eyebrow">光譜儀</span>
+    <h2>察「焰」觀「色」：以自製分光儀檢視焰色實驗</h2>
+    <div class="meta"><span>第 48 屆高中組 · 生活與應用科學科 · 佳作</span><span>編號 <span class="mono">040807</span></span><a href="https://twsf.ntsec.gov.tw/activity/race-1/48/pdf/040807.pdf" target="_blank" rel="noopener">作品說明書 PDF</a></div>
+  </div>
+  <p class="method">用透明 DVD 光碟加網路攝影機自製分光儀，觀察焰色反應的光譜。</p>
+
+  <ol class="findings">
+    <li class="finding">
+      <span class="chip high">嚴重</span>
+      <div class="body">
+        <h3>CD／DVD 的繞射角數據不合理</h3>
+        <div class="tablebox">
+          <table>
+            <thead><tr><th>532 nm 雷射</th><th>一級 θ1<br>理論</th><th>二級 θ2<br>理論</th><th>報告值</th></tr></thead>
+            <tbody>
+              <tr><td>CD（軌距 1.6 μm）</td><td class="num">19.4°</td><td class="num">41.7°</td><td class="num">21°、49°</td></tr>
+              <tr><td>DVD（軌距 0.74 μm）</td><td class="num">46°</td><td class="num">不存在</td><td class="num off">19°、42°</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>報告的 DVD 數字反而和 CD 的理論值吻合，很可能把兩片標錯了。報告又說 DVD 分光較好，攝影機卻擺在 21°（CD 的角度），前後矛盾。</p>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip mid">不周延</span>
+      <div class="body">
+        <h3>校正有偏差，導致鈉線判讀錯誤</h3>
+        <ul>
+          <li>報告把 600 nm 的譜線推測為鈉線，但鈉 D 線在 589 nm。差了約 11 nm，正好暴露校正誤差。</li>
+          <li>鈉污染本來就是焰色實驗最常見的干擾，白金絲應先用鹽酸清洗、灼燒到無色，報告卻說「還沒足夠的證據」。</li>
+          <li>校正用的 623 和 690 nm，在日光燈光譜中不是可靠的汞線。日光燈的紅光主要是螢光粉中銪的 611 nm。</li>
+          <li>用 R=0.9984 說明校正好也不恰當：R 很高不等於波長準確。</li>
+        </ul>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip mid">不周延</span>
+      <div class="body">
+        <h3>LED 結論錯誤</h3>
+        <div class="vs">
+          <div class="bad"><div class="lbl">報告寫的</div>綠光 LED「含綠、黃、紅」，黃光 LED「含綠」，白光 LED 是「三種顏色混合」。</div>
+          <div class="ok"><div class="lbl">實際上</div>單色 LED 的發光波段都很窄，只有一個峰。常見的白光 LED 是藍光晶片加黃色螢光粉，光譜是一個藍光峰加一段寬的黃光帶。</div>
+        </div>
+        <p>多出來的峰，較可能是攝影機紅綠藍濾鏡分色、二級繞射或過度曝光造成的假訊號。</p>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip low">小錯</span>
+      <div class="body">
+        <h3>用詞：螢光不是磷光</h3>
+        <p>日光燈內壁塗的是「螢光」物質，不是「磷光」。</p>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip low">小錯</span>
+      <div class="body">
+        <h3>噴霧比較快的原因推理顛倒</h3>
+        <p>報告說「噴霧比白金絲快，是氣化吸熱造成」。氣化吸熱只會讓速度變慢，噴霧快是因為液滴小、表面積大。</p>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip low">小錯</span>
+      <div class="body">
+        <h3>前後不一致</h3>
+        <ul>
+          <li>結論提到「以鐵鍋加熱」，但方法裡從沒出現過鐵鍋。</li>
+          <li>實驗編號跳號（實驗二-1 之後直接到「實驗五」），計時數據的記號也很混亂。</li>
+        </ul>
+      </div>
+    </li>
+
+    <li class="finding">
+      <span class="chip low">小錯</span>
+      <div class="body">
+        <h3>鉀的光譜沒有交代</h3>
+        <p>器材列了 KCl，結果卻沒有鉀的光譜。鉀的特徵線在 766 nm，網路攝影機的紅外線濾片多半會擋掉，報告沒有說明。</p>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<section class="advice" id="advice">
+  <h2>自己做實驗時可以避開的坑</h2>
+  <p>下面幾點正好是這三件作品共同的弱點。</p>
+  <ul class="list-plain">
+    <li><b>旋光實驗：</b>先用純水定零點，每個條件重複量 3 次以上，用全量程的 cos² 曲線擬合來讀角度。</li>
+    <li><b>旋光實驗：</b>葡萄糖、果糖溶解後要等變旋平衡再量，並記錄溫度。</li>
+    <li><b>光譜儀：</b>鎖定攝影機的曝光、增益和白平衡，必要時做 gamma 線性化。</li>
+    <li><b>光譜儀：</b>用多條已知譜線校正，並實際量出解析度。</li>
+  </ul>
+</section>
+
+<footer>
+  <h3>還沒讀內文的相關作品</h3>
+  <ul>
+    <li>第 45 屆「數位影像分析可見光光譜」（高中物理）</li>
+    <li>第 53 屆「解『色』－自製光譜儀之校正方法…」（國中物理）</li>
+    <li>第 45 屆「醣寶寶的旋光世界」（高中化學）</li>
+    <li>第 46 屆「我的光會轉彎」（高中化學）</li>
+    <li>第 47 屆「水果抗氧化的『旋』機」（高中生活與應用科學科）</li>
+    <li>「燈『糖』入視」（國小化學，網頁拒絕連線）</li>
+    <li>2025 仰望盃「溫控水浴旋光度計」（主機連不上）</li>
+  </ul>
+  <p>資料來源：國立臺灣科學教育館「中華民國中小學科學展覽會」歷屆作品說明書。本頁評析僅依說明書文字與數據判讀，未重做實驗。</p>
+</footer>
+
+</div>
+</body>
+</html>
