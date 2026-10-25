@@ -209,8 +209,13 @@ button:hover{border-color:var(--accent);color:var(--accent)}
         </select>
       </div>
       <div class="ctl">
-        <label for="offset">相機偏離狹縫軸線 <output id="offsetOut">0.0 cm</output></label>
-        <input type="range" id="offset" min="-4" max="4" step="0.5" value="0">
+        <label for="slitY">狹縫位置（沿 13 cm 寬） <output id="slitYOut">0.0 cm（中央）</output></label>
+        <input type="range" id="slitY" min="-5.5" max="5.5" step="0.5" value="0">
+      </div>
+      <div class="ctl">
+        <label for="camY">相機位置（沿 13 cm 寬） <output id="camYOut">0.0 cm（中央）</output></label>
+        <input type="range" id="camY" min="-5" max="5" step="0.5" value="0">
+        <span class="hint">以盒寬中心為 0，正值偏向手稿的上方。</span>
       </div>
       <div class="row">
         <label class="check"><input type="checkbox" id="resp" checked> 套用相機感光曲線</label>
@@ -248,7 +253,7 @@ button:hover{border-color:var(--accent);color:var(--accent)}
   <section>
     <div class="section-head">
       <h2>量到的光譜</h2>
-      <p>取 +1 階那一側的光譜，沿水平方向讀出亮度，換算成波長。</p>
+      <p>取兩側一階光譜中解析度較好的那一側，沿水平方向讀出亮度，換算成波長。</p>
     </div>
     <div class="card chart-box">
       <canvas id="chart" height="300"></canvas>
@@ -1325,13 +1330,15 @@ button:hover{border-color:var(--accent);color:var(--accent)}
 // ---------- geometry (cm) and camera (mm), from the sketch ----------
 // L1: grating to camera, L2: slit to grating; set from S.gpos in simulate()
 let L1=10, L2=12;
+// first order used for the chart and metrics: whichever side resolves 546 nm better
+let ORD=1;
 const HALF_W=6.5, BOX_H=4.5, LEN=22, SLIT_HALF=1.4;
 const GNAME={dvd:'DVD 透射光柵',g1000:'光柵片 1000 線/mm',cd:'CD 光柵',g500:'光柵片 500 線/mm'};
 const F_MM=2.2, SENSOR_MM=3.6;
 const LMIN=340, LMAX=820, STEP=0.1, NS=Math.round((LMAX-LMIN)/STEP)+1;
 const GRATINGS={dvd:{d:740},g1000:{d:1000},cd:{d:1600},g500:{d:2000}};
 const RES={640:[640,480],1280:[1280,720],1920:[1920,1080]};
-const DEFAULT={source:'cfl',grating:'dvd',slit:1.0,gpos:10,res:1280,offset:0,resp:true};
+const DEFAULT={source:'cfl',grating:'dvd',slit:1.0,gpos:10,res:1280,slitY:0,camY:0,resp:true};
 let S=Object.assign({},DEFAULT);
 const $=s=>document.querySelector(s);
 const tok=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -1382,7 +1389,7 @@ function sourceColor(src){
 // ---------- optics: pixel -> wavelength mapping ----------
 // Slit at x=22, y=0; grating at x=10; camera at x=0, y=hc. Ray to camera at angle β leaves grating at g=hc-L1·tanβ.
 // Transmission grating: sinβ = sinα + mλ/d, with sinα the incidence from the slit.
-function geom(o){o=o||{};return{d:GRATINGS[S.grating].d,hc:S.offset,w:(o.slit!=null?o.slit:S.slit)/10};}
+function geom(o){o=o||{};return{d:GRATINGS[S.grating].d,hc:S.camY-S.slitY,ys:S.slitY,w:(o.slit!=null?o.slit:S.slit)/10};}
 function lamAt(tb,m,G){const b=Math.atan(tb),g=G.hc-L1*tb,sa=g/Math.hypot(L2,g);return{lam:G.d*(Math.sin(b)-sa)/m,g};}
 function columns(N,m,G){
   const p=SENSOR_MM/N,cx=N/2,out=new Array(N),h=p/2/F_MM;
@@ -1390,7 +1397,7 @@ function columns(N,m,G){
     const tb=(u+0.5-cx)*p/F_MM,c=lamAt(tb,m,G);
     const Wp=Math.abs(lamAt(tb+h,m,G).lam-lamAt(tb-h,m,G).lam);
     const Ws=Math.abs(G.d/m)*L2*L2/Math.pow(L2*L2+c.g*c.g,1.5)*G.w;
-    out[u]={lam:c.lam,g:c.g,Wp,Ws,ok:Math.abs(c.g)<=HALF_W&&c.lam>LMIN+3&&c.lam<LMAX-3};
+    out[u]={lam:c.lam,g:c.g,Wp,Ws,ok:Math.abs(c.g+G.ys)<=HALF_W&&c.lam>LMIN+3&&c.lam<LMAX-3};
   }
   return out;
 }
@@ -1421,6 +1428,8 @@ function simulate(){
   const G=geom(),[N,H]=RES[S.res],src=prep(S.source),sigma=blurSigma(N),cols={},prof={};
   for(const m of[-2,-1,1,2]){cols[m]=columns(N,m,G);prof[m]=blur(profile(src,cols[m]),sigma);}
   let mx=0;for(const m of[-1,1])for(let u=0;u<N;u++)if(prof[m][u]>mx)mx=prof[m][u];
+  const pick=[1,-1].map(m=>{ORD=m;const f=fwhmAt(546.07,G,N);return f&&{m,nm:f.nm};}).filter(Boolean).sort((a,b)=>a.nm-b.nm);
+  ORD=pick.length?pick[0].m:1;
   return{G,N,H,src,cols,prof,mx,sigma};
 }
 
@@ -1429,7 +1438,7 @@ function uOf(cols,lam){
   for(let u=0;u<cols.length-1;u++){const a=cols[u],b=cols[u+1];if(a.ok&&b.ok&&(a.lam-lam)*(b.lam-lam)<=0&&a.lam!==b.lam)return u+(lam-a.lam)/(b.lam-a.lam);}
   return null;
 }
-function lineTest(lines,G,N){const cols=columns(N,1,G);return{cols,v:blur(profile({c:null,lines:lines.map(l=>[l,1])},cols),blurSigma(N))};}
+function lineTest(lines,G,N){const cols=columns(N,ORD,G);return{cols,v:blur(profile({c:null,lines:lines.map(l=>[l,1])},cols),blurSigma(N))};}
 function fwhmAt(lam,G,N){
   const{cols,v}=lineTest([lam],G,N),uc=uOf(cols,lam);if(uc==null)return null;
   let k=Math.round(uc);
@@ -1519,7 +1528,7 @@ function drawChart(sim){
   for(let l=X0;l<=X1;l+=0.25){let v=src.c[Math.round((l-LMIN)/STEP)];for(const[ll,a]of src.lines)v+=a*gauss(l,ll,0.3)/(0.3*2.5066);ideal.push([l,v]);if(v>im)im=v;}
   const drawIdeal=()=>{ctx.strokeStyle=muted;ctx.lineWidth=1;ctx.globalAlpha=0.9;ctx.beginPath();ideal.forEach(([l,v],i)=>{const x=px(l),y=py(v/im);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();ctx.globalAlpha=1;};
   // measured
-  const c1=sim.cols[1],v1=sim.prof[1];let mm=0;for(let u=0;u<c1.length;u++)if(c1[u].ok&&v1[u]>mm)mm=v1[u];
+  const c1=sim.cols[ORD],v1=sim.prof[ORD];let mm=0;for(let u=0;u<c1.length;u++)if(c1[u].ok&&v1[u]>mm)mm=v1[u];
   if(mm>0){
     const rng=mulberry32(5),pts=[];
     for(let u=0;u<c1.length;u++){const c=c1[u];if(c.ok&&c.lam>=X0-3&&c.lam<=X1+3)pts.push([c.lam,Math.max(0,v1[u]/mm+(rng()+rng()-1)*0.006)]);}
@@ -1538,7 +1547,7 @@ function drawChart(sim){
     if(S.source==='sun'){ctx.fillStyle=muted;for(const f of FRAUN)if(f[0]>X0&&f[0]<X1){ctx.fillText(f[3],px(f[0]),M.t-10);ctx.strokeStyle=rule;ctx.setLineDash([2,3]);ctx.beginPath();ctx.moveTo(px(f[0]),M.t-4);ctx.lineTo(px(f[0]),Hc-M.b);ctx.stroke();ctx.setLineDash([]);}}
   }else{
     drawIdeal();
-    ctx.fillStyle=muted;ctx.textAlign='center';ctx.font='14px "Noto Sans TC", sans-serif';ctx.fillText('這個設定下，+1 階光譜沒有落在畫面裡。',(M.l+W-M.r)/2,(M.t+Hc-M.b)/2);
+    ctx.fillStyle=muted;ctx.textAlign='center';ctx.font='14px "Noto Sans TC", sans-serif';ctx.fillText('這個設定下，兩側的一階光譜都沒有落在畫面裡。',(M.l+W-M.r)/2,(M.t+Hc-M.b)/2);
   }
   ctx.restore();
 }
@@ -1573,14 +1582,14 @@ function updateMetrics(sim){
   }
   // coverage
   let lo=Infinity,hi=-Infinity,span=0;
-  for(const c of cols[1])if(c.ok&&c.lam>=350&&c.lam<=800){lo=Math.min(lo,c.lam);hi=Math.max(hi,c.lam);if(c.lam>=400&&c.lam<=700)span++;}
+  for(const c of cols[ORD])if(c.ok&&c.lam>=350&&c.lam<=800){lo=Math.min(lo,c.lam);hi=Math.max(hi,c.lam);if(c.lam>=400&&c.lam<=700)span++;}
   if(lo<hi){
     let elo=lo,ehi=hi;
     if(S.resp){elo=Math.max(lo,412);ehi=Math.min(hi,652);}
     $('#t-range').innerHTML=`${Math.round(elo)}–${Math.round(ehi)}<small>nm</small>`;
     const lim=S.resp&&(hi>652)?'紅端受紅外截止濾鏡限制':'紅端受光柵寬度或畫面邊緣限制';
     $('#t-range-s').textContent=`400–700 nm 佔 ${span} 像素；${lim}`;
-  }else{$('#t-range').textContent='—';$('#t-range-s').textContent='+1 階不在畫面內';}
+  }else{$('#t-range').textContent='—';$('#t-range-s').textContent='一階光譜不在畫面內';}
   // neighbouring-line checks
   const CH=[['Tb 542.4 與 Hg 546.1',542.4,546.07,'相距 3.7 nm'],['汞黃雙線 577.0 與 579.1',576.96,579.07,'相距 2.1 nm'],['鈉 D 雙線 589.0 與 589.6',588.995,589.592,'相距 0.6 nm']];
   $('#checks').innerHTML=CH.map(([name,a,b,sep])=>{
@@ -1654,7 +1663,7 @@ function make3D(){
   const lbSlit=makeLabel('狹縫 1 mm',V(22.4,0,6.6),true);
   const lbGrating=makeLabel(GNAME[S.grating],V(L1,0,6.4),true);
   const lbCam=makeLabel('USB webcam',V(0.6,0,6.4),true);
-  makeLabel('光源',V(31,0,2.2));
+  const lbLamp=makeLabel('光源',V(31,0,2.2));
   // dimension lines
   function dim(a,b,text,lp){const g=new THREE.BufferGeometry().setFromPoints([a,b]);scene.add(new THREE.Line(g,dimMat));
     const n=new THREE.Vector3(0,0.35,0);for(const p of[a,b]){scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([p.clone().sub(n),p.clone().add(n)]),dimMat));}
@@ -1681,19 +1690,20 @@ function make3D(){
     let lo=-1.45,hi=1.45;if(f(lo)>0||f(hi)<0)return null;
     for(let i=0;i<50;i++){const mid=(lo+hi)/2;if(f(mid)>0)hi=mid;else lo=mid;}
     const tb=Math.tan((lo+hi)/2),g=G.hc-L1*tb;
-    if(Math.abs(g)>HALF_W||Math.abs(tb)*F_MM>SENSOR_MM/2)return null;
+    if(Math.abs(g+G.ys)>HALF_W||Math.abs(tb)*F_MM>SENSOR_MM/2)return null;
     return g;
   }
   function update(sim){
     const G=sim.G,w=G.w,src=SOURCES[S.source];
     // slit plate with razor blades; 2D y maps to 3D -z
     disposeGroup(slitG);
-    const len=6.8-w/2;
-    slitG.add(box(0.3,BOX_H,len,slitMat,LEN+0.15,Y,-(w/2+len/2)));
-    slitG.add(box(0.3,BOX_H,len,slitMat,LEN+0.15,Y,w/2+len/2));
-    slitG.add(box(0.06,3,1.6,steel,LEN+0.33,Y,-(w/2+0.8)));
-    slitG.add(box(0.06,3,1.6,steel,LEN+0.33,Y,w/2+0.8));
-    camG.position.z=-G.hc;lbCam.sp.position.z=-G.hc;
+    const zs=-G.ys,lenA=6.8+zs-w/2,lenB=6.8-zs-w/2;
+    slitG.add(box(0.3,BOX_H,lenA,slitMat,LEN+0.15,Y,zs-w/2-lenA/2));
+    slitG.add(box(0.3,BOX_H,lenB,slitMat,LEN+0.15,Y,zs+w/2+lenB/2));
+    slitG.add(box(0.06,3,1.6,steel,LEN+0.33,Y,zs-(w/2+0.8)));
+    slitG.add(box(0.06,3,1.6,steel,LEN+0.33,Y,zs+w/2+0.8));
+    const zcam=-(G.hc+G.ys);camG.position.z=zcam;lbCam.sp.position.z=zcam;
+    lbSlit.sp.position.z=zs;lamp.position.z=zs;lbLamp.sp.position.z=zs;
     gmesh.position.x=L1;holder.position.x=L1;lbGrating.sp.position.x=L1;
     if(lbGrating.text!==GNAME[S.grating]){lbGrating.text=GNAME[S.grating];paintLabel(lbGrating);}
     while(dimG.children.length){const c=dimG.children.pop();c.geometry.dispose();}
@@ -1705,21 +1715,21 @@ function make3D(){
     // rays
     disposeGroup(rayG);
     const zc=sourceColor(sim.src),white=new THREE.Color(0.55+0.45*zc[0],0.55+0.45*zc[1],0.55+0.45*zc[2]);
-    const slitP=V(LEN,0),camP=V(1.15,-G.hc);
-    rayG.add(cyl(V(30.2,0),V(LEN+0.4,0),0.07,white,0.9));
-    const g0=G.hc*L2/(L1+L2);
+    const slitP=V(LEN,zs),camP=V(1.15,zcam);
+    rayG.add(cyl(V(30.2,zs),V(LEN+0.4,zs),0.07,white,0.9));
+    const g0=G.hc*L2/(L1+L2)+G.ys;
     rayG.add(cyl(slitP,V(L1,-g0),0.035,white,0.85));rayG.add(cyl(V(L1,-g0),camP,0.035,white,0.85));
     for(const m of[1,-1,2,-2])for(const lam of src.rays){
       const g=solveRay(lam,m,G);if(g==null)continue;
       const col=vivid(lam),op=Math.abs(m)===2?0.45:1;
-      rayG.add(cyl(slitP,V(L1,-g),0.028,col,op*0.8));rayG.add(cyl(V(L1,-g),camP,0.03,col,op));
+      const gz=-(g+G.ys);rayG.add(cyl(slitP,V(L1,gz),0.028,col,op*0.8));rayG.add(cyl(V(L1,gz),camP,0.03,col,op));
     }
     // first-order light leaving the grating centre (dashed lines in the sketch)
     for(const m of[1,-1]){
       const sb=m*src.main/G.d;if(Math.abs(sb)>=1)continue;
-      const b=Math.asin(sb),tb=Math.tan(b);let x=0,y=L1*tb;
-      if(Math.abs(y)>HALF_W){y=Math.sign(y)*HALF_W;x=L1-HALF_W/Math.abs(tb);}
-      const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(L1,0),V(x,-y)]),new THREE.LineDashedMaterial({color:vivid(src.main),dashSize:0.45,gapSize:0.3}));
+      const b=Math.asin(sb),tb=Math.tan(b);let x=0,y=G.ys+L1*tb;
+      if(Math.abs(y)>HALF_W){y=Math.sign(y)*HALF_W;x=L1-(y-G.ys)/tb;}
+      const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(L1,zs),V(x,-y)]),new THREE.LineDashedMaterial({color:vivid(src.main),dashSize:0.45,gapSize:0.3}));
       line.computeLineDistances();rayG.add(line);
     }
   }
@@ -1749,11 +1759,11 @@ function make3D(){
 let view3d=null,pending=false;
 function render(){pending=false;const sim=simulate();drawFrame(sim);drawChart(sim);updateMetrics(sim);if(view3d)view3d.update(sim);lastSim=sim;}
 let lastSim=null;
-function schedule(){if(!pending){pending=true;requestAnimationFrame(render);}}
+function schedule(){if(!pending){pending=true;setTimeout(render,16);}}
 function syncInputs(){
   document.querySelectorAll('input[name=source]').forEach(r=>r.checked=r.value===S.source);
-  $('#grating').value=S.grating;$('#slit').value=S.slit;$('#res').value=String(S.res);$('#offset').value=S.offset;$('#resp').checked=S.resp;
-  $('#slitOut').textContent=S.slit.toFixed(2)+' mm';$('#offsetOut').textContent=S.offset.toFixed(1)+' cm';
+  $('#grating').value=S.grating;$('#slit').value=S.slit;$('#res').value=String(S.res);$('#slitY').value=S.slitY;$('#camY').value=S.camY;$('#resp').checked=S.resp;
+  $('#slitOut').textContent=S.slit.toFixed(2)+' mm';posText();
   $('#gpos').value=S.gpos;gposText();
 }
 function gposText(){$('#gposOut').textContent=S.gpos.toFixed(1)+' cm';$('#gposHint').textContent=`離狹縫 ${(LEN-S.gpos).toFixed(1)} cm。手稿數值 10 cm。`;}
@@ -1762,7 +1772,10 @@ document.querySelectorAll('input[name=source]').forEach(r=>r.addEventListener('c
 $('#grating').addEventListener('change',e=>{S.grating=e.target.value;schedule();});
 $('#slit').addEventListener('input',e=>{S.slit=+e.target.value;$('#slitOut').textContent=S.slit.toFixed(2)+' mm';schedule();});
 $('#res').addEventListener('change',e=>{S.res=+e.target.value;schedule();});
-$('#offset').addEventListener('input',e=>{S.offset=+e.target.value;$('#offsetOut').textContent=S.offset.toFixed(1)+' cm';schedule();});
+const fmtPos=v=>v===0?'0.0 cm（中央）':(v>0?'+':'')+v.toFixed(1)+' cm';
+function posText(){$('#slitYOut').textContent=fmtPos(S.slitY);$('#camYOut').textContent=fmtPos(S.camY);}
+$('#slitY').addEventListener('input',e=>{S.slitY=+e.target.value;posText();schedule();});
+$('#camY').addEventListener('input',e=>{S.camY=+e.target.value;posText();schedule();});
 $('#resp').addEventListener('change',e=>{S.resp=e.target.checked;schedule();});
 $('#reset').addEventListener('click',()=>{S=Object.assign({},DEFAULT);syncInputs();schedule();});
 function onTheme(){if(view3d)view3d.recolor();if(lastSim)drawChart(lastSim);}
