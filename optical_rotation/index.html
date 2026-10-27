@@ -72,6 +72,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .model-bar{position:absolute;inset:12px 12px auto 12px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;pointer-events:none}
 .model-bar>*{pointer-events:auto}
 .chip{font-family:var(--f-mono);font-size:12px;background:color-mix(in srgb,var(--surface) 88%,transparent);border:1px solid var(--rule);border-radius:999px;padding:3px 10px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.chip.ext{cursor:pointer;color:var(--ink);padding:5px 12px;font-size:13px}
+.chip input{accent-color:var(--accent);margin:0;width:18px;height:18px}
 .views{display:flex;flex-wrap:wrap;gap:6px}
 .views button{font-size:12px;padding:5px 12px;min-height:32px;border-radius:999px;background:color-mix(in srgb,var(--surface) 88%,transparent)}
 .views button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
@@ -167,6 +169,7 @@ th{font-weight:500;color:var(--muted);white-space:nowrap}
     <div class="card model" id="model">
       <div class="model-bar">
         <span class="chip" id="hint3d">拖曳旋轉 · 滾輪縮放 · 右鍵平移</span>
+        <label class="chip ext"><input type="checkbox" id="ext"> 外部（著色）觀測</label>
         <div class="views" role="group" aria-label="視角">
           <button type="button" data-view="all" aria-pressed="true">全景</button>
           <button type="button" data-view="top">頂端</button>
@@ -177,6 +180,7 @@ th{font-weight:500;color:var(--muted);white-space:nowrap}
         <span style="color:var(--ch-r)"><i></i>620 nm 偏振方向</span>
         <span style="color:var(--ch-g)"><i></i>540 nm</span>
         <span style="color:var(--ch-b)"><i></i>460 nm</span>
+        <span id="extKey" hidden>管外顏色＝從側面看到的散射光</span>
       </div>
       <button type="button" class="unlock" id="unlock" hidden>點一下操作 3D 模型</button>
       <div class="fallback" hidden>這個瀏覽器無法顯示 3D 模型，下方的模擬和數據不受影響。</div>
@@ -1569,6 +1573,33 @@ function make3D(){
   // liquid column
   const liqMat=new THREE.MeshStandardMaterial({color:0x8fb8d8,transparent:true,opacity:0.32,roughness:0.2,depthWrite:false});
   const liquid=new THREE.Mesh(new THREE.CylinderGeometry(R_IN,R_IN,1,40),liqMat);scene.add(liquid);
+  // external (side-scatter) view: the solution scatters the beam sideways like dipoles along E, which radiate least along E.
+  // Seen along the surface normal n = (sin t, 0, cos t) with E = (cos φ, 0, sin φ), brightness ∝ 1 − (E·n)² = cos²(φ + t),
+  // so the rotating φ(λ, z) paints a coloured helix — the "barber pole" of optical rotation.
+  const extC=document.createElement('canvas');extC.width=256;extC.height=256;
+  const extTex=new THREE.CanvasTexture(extC);
+  const sleeve=new THREE.Mesh(new THREE.CylinderGeometry(R_OUT+0.03,R_OUT+0.03,1,72,1,true),
+    new THREE.MeshBasicMaterial({map:extTex,transparent:true,opacity:0.93,depthWrite:false}));
+  sleeve.visible=false;scene.add(sleeve);
+  function paintSleeve(){
+    const x=extC.getContext('2d'),Wc=extC.width,Hc=extC.height,img=x.createImageData(Wc,Hc),d=img.data;
+    // per-channel weights: source × camera response × Rayleigh λ⁻⁴, each normalised so an unrotated beam reads white
+    const ws={};for(const c of CH){const w=W[c].map((v,i)=>v*(550/LAM[i])**4),s=w.reduce((a,b)=>a+b,0)||1;ws[c]=w.map(v=>v/s);}
+    const c2=new Float32Array(Wc),s2=new Float32Array(Wc);
+    for(let i=0;i<Wc;i++){const t=2*Math.PI*i/Wc;c2[i]=Math.cos(2*t);s2[i]=Math.sin(2*t);}
+    const k=alphaK(S.conc,S.height);
+    for(let j=0;j<Hc;j++){
+      const frac=1-(j+0.5)/Hc,BC={};   // canvas row 0 is the top of the liquid
+      for(const c of CH){let B=0,C=0;const w=ws[c];
+        for(let i=0;i<LAM.length;i++){const p=rad(2*k*frac*DRUDE[i]);B+=w[i]*Math.cos(p);C+=w[i]*Math.sin(p);}
+        BC[c]=[B,C];}
+      for(let i=0;i<Wc;i++){const o=(j*Wc+i)*4;
+        // cos²(φ+t) = (1 + cos2φ·cos2t − sin2φ·sin2t) / 2, summed over λ
+        CH.forEach((c,ci)=>{const v=(1+BC[c][0]*c2[i]-BC[c][1]*s2[i])/2;d[o+ci]=Math.round(255*Math.pow(Math.max(0,Math.min(1,v)),1/2.2));});
+        d[o+3]=255;}
+    }
+    x.putImageData(img,0,0);extTex.needsUpdate=true;
+  }
   // stand clamps
   const rod=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,TUBE_L+14,12),new THREE.MeshStandardMaterial({color:0xc9ced6,metalness:0.8,roughness:0.3}));
   rod.position.set(-9,(TUBE_L+14)/2-9,0);scene.add(rod);
@@ -1632,6 +1663,9 @@ function make3D(){
     const h=Math.max(0.01,S.height);
     liquid.visible=S.height>0.2;liquid.scale.y=h;liquid.position.y=h/2+0.3;
     liqMat.opacity=S.sub==='water'||S.conc===0?0.2:0.2+Math.min(0.3,S.conc/100);
+    sleeve.visible=extView&&S.height>0.2;
+    if(sleeve.visible){sleeve.scale.y=h;sleeve.position.y=h/2+0.3;paintSleeve();}
+    $('#extKey').hidden=!extView;
     lbLiq.text=S.sub==='water'?'水':`${SUBS[S.sub].name}溶液 ${S.conc} g/100 mL`;paintLabel(lbLiq);
     lbLiq.sp.position.y=Math.max(12,h*0.7);
     pol2.rotation.y=-rad(S.theta);
@@ -1672,7 +1706,7 @@ function make3D(){
 }
 
 // ---------- wiring ----------
-let view3d=null,pending=false,lastSim=null;
+let view3d=null,pending=false,lastSim=null,extView=false;
 function render(){pending=false;const sim=simulate();lastSim=sim;drawFrame(sim);charts.forEach(drawChart);updateMetrics(sim);if(view3d)view3d.update(sim);}
 function schedule(){if(!pending){pending=true;requestAnimationFrame(render);}}
 function syncInputs(){
@@ -1691,6 +1725,7 @@ $('#height').addEventListener('input',e=>{S.height=+e.target.value;syncInputs();
 $('#theta').addEventListener('input',e=>{S.theta=+e.target.value;syncInputs();schedule();});
 document.querySelectorAll('[data-theta]').forEach(b=>b.addEventListener('click',()=>{S.theta=+b.dataset.theta;syncInputs();schedule();}));
 document.querySelectorAll('[data-min]').forEach(b=>b.addEventListener('click',()=>{if(lastSim){S.theta=lastSim.minT[b.dataset.min];syncInputs();schedule();}}));
+$('#ext').addEventListener('change',e=>{extView=e.target.checked;schedule();});
 $('#reset').addEventListener('click',()=>{S=Object.assign({},DEFAULT);syncInputs();schedule();});
 function onTheme(){if(view3d)view3d.recolor();charts.forEach(drawChart);if(lastSim&&view3d)view3d.update(lastSim);}
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',onTheme);
