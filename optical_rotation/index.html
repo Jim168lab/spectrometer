@@ -74,6 +74,8 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .chip{font-family:var(--f-mono);font-size:12px;background:color-mix(in srgb,var(--surface) 88%,transparent);border:1px solid var(--rule);border-radius:999px;padding:3px 10px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
 .chip.ext{cursor:pointer;color:var(--ink);padding:5px 12px;font-size:13px}
 .chip input{accent-color:var(--accent);margin:0;width:18px;height:18px}
+.check{justify-content:flex-start!important;align-items:center;gap:8px!important;cursor:pointer}
+.check input{accent-color:var(--accent);width:16px;height:16px;margin:0}
 .views{display:flex;flex-wrap:wrap;gap:6px}
 .views button{font-size:12px;padding:5px 12px;min-height:32px;border-radius:999px;background:color-mix(in srgb,var(--surface) 88%,transparent)}
 .views button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
@@ -223,12 +225,23 @@ th{font-weight:500;color:var(--muted);white-space:nowrap}
         </div>
       </div>
       <fieldset class="ctl">
-        <legend>白光 LED</legend>
+        <legend>光源</legend>
         <div class="seg" role="radiogroup">
-          <label><input type="radio" name="led" value="cool" checked><span>冷白 6500 K</span></label>
-          <label><input type="radio" name="led" value="warm"><span>暖白 3000 K</span></label>
+          <label><input type="radio" name="led" value="cool" checked><span>冷白 LED</span></label>
+          <label><input type="radio" name="led" value="warm"><span>暖白 LED</span></label>
+          <label><input type="radio" name="led" value="laser650"><span>紅光雷射 650 nm</span></label>
+          <label><input type="radio" name="led" value="laser532"><span>綠光雷射 532 nm</span></label>
         </div>
+        <span class="hint" id="pitchHint"></span>
       </fieldset>
+      <div class="ctl">
+        <label class="check"><input type="checkbox" id="sulfur"> 加入膠體硫（大蘇打＋幾滴稀鹽酸）</label>
+        <div class="ctl hidden" id="sulfurBox">
+          <label for="stime">反應時間 <output id="stimeOut"></output></label>
+          <input type="range" id="stime" min="0" max="20" step="0.5" value="5">
+          <span class="hint" id="sulfurHint"></span>
+        </div>
+      </div>
       <div class="row">
         <span class="hint">θ 以迎著光看、順時針為正。</span>
         <button type="button" id="reset">回到手稿設定</button>
@@ -243,7 +256,7 @@ th{font-weight:500;color:var(--muted);white-space:nowrap}
     </div>
     <div class="tiles">
       <div class="card tile"><span class="k">旋光角 α @ 589 nm</span><span class="v" id="tA"></span><span class="s" id="tAs"></span></div>
-      <div class="card tile"><span class="k">各通道旋光角（R / G / B）</span><span class="v rgbv" id="tAch"></span><span class="s">通道中心 620 / 540 / 460 nm</span></div>
+      <div class="card tile"><span class="k" id="tAchK">各通道旋光角（R / G / B）</span><span class="v rgbv" id="tAch"></span><span class="s" id="tAchS">通道中心 620 / 540 / 460 nm</span></div>
       <div class="card tile"><span class="k">觀測點 RGB 值</span><span class="v rgbv" id="tRGB"></span><span class="s" id="tRGBs"></span></div>
       <div class="card tile"><span class="k">液高每變 1 cm</span><span class="v" id="tSens"></span><span class="s" id="tSensS"></span></div>
     </div>
@@ -1351,7 +1364,7 @@ const TUBE_L=100, R_OUT=2.0, R_IN=1.9;
 const Y_LED=-7, Y_POL1=-3, Y_POL2=TUBE_L+3, Y_CAM=TUBE_L+10;
 const SUBS={fructose:{name:'果糖',spec:-92.4},water:{name:'水',spec:0},sucrose:{name:'蔗糖',spec:66.5},
   glucose:{name:'葡萄糖',spec:52.7},invert:{name:'蜂蜜',spec:-20},custom:{name:'自訂溶質',spec:-92.4}};
-const DEFAULT={sub:'fructose',spec:-92.4,conc:10,height:100,theta:90,led:'cool'};
+const DEFAULT={sub:'fructose',spec:-92.4,conc:10,height:100,theta:90,led:'cool',sulfur:false,stime:5};
 const LAMBDA0=160, LEAK=1/300, FULL=220, CH=['r','g','b'], CHN={r:'R',g:'G',b:'B'}, CH_LAM={r:620,g:540,b:460};
 let S=Object.assign({},DEFAULT);
 const $=s=>document.querySelector(s);
@@ -1363,7 +1376,11 @@ const g2=(x,m,s1,s2)=>gauss(x,m,x<m?s1:s2);
 const LED={
   cool:l=>1.0*gauss(l,450,10)+0.55*g2(l,555,40,62),
   warm:l=>0.45*gauss(l,450,10)+0.85*g2(l,600,48,62),
+  laser650:l=>gauss(l,650,1),
+  laser532:l=>gauss(l,532,1),
 };
+const LASER={laser650:650,laser532:532};
+const isLaser=()=>S.led in LASER;
 const irCut=l=>1/(1+Math.exp((l-655)/10));
 const SENS={r:l=>g2(l,600,22,34)*irCut(l), g:l=>g2(l,535,30,36), b:l=>g2(l,455,20,30)};
 const DRUDE=LAM.map(l=>(589**2-LAMBDA0**2)/(l**2-LAMBDA0**2));
@@ -1371,18 +1388,38 @@ const drude=l=>(589**2-LAMBDA0**2)/(l**2-LAMBDA0**2);
 const rad=d=>d*Math.PI/180;
 const wrap180=a=>((a+90)%180+180)%180-90;
 
-// per-channel weight w_c(λ)=S(λ)s_c(λ), normalised so parallel polarisers + water reads FULL
-let W={};
+// per-channel weight w_c(λ)=S(λ)s_c(λ)g_c, normalised so parallel polarisers + water reads FULL.
+// Channel gains g_c are white-balanced on the cool LED, so a laser reads in its own colour (brightest channel = FULL).
+let W={},GAIN=null;
 function prepWeights(){
-  const src=LED[S.led];W={};
-  for(const c of CH){const w=LAM.map(l=>src(l)*SENS[c](l));const sum=w.reduce((a,b)=>a+b,0)*(1-LEAK);W[c]=w.map(v=>v/sum*FULL);}
+  if(!GAIN){GAIN={};for(const c of CH)GAIN[c]=1/LAM.reduce((a,l)=>a+LED.cool(l)*SENS[c](l),0);}
+  const src=LED[S.led],raw={};W={};
+  for(const c of CH)raw[c]=LAM.map(l=>src(l)*SENS[c](l)*GAIN[c]);
+  const sums=CH.map(c=>raw[c].reduce((a,b)=>a+b,0)),top=Math.max(...sums);
+  CH.forEach((c,k)=>{const s=(isLaser()?top:sums[k])*(1-LEAK);W[c]=raw[c].map(v=>v/s*FULL);});
 }
+// colloidal sulfur (Na₂S₂O₃ + dilute HCl), simplified: particles grow with reaction time at a fixed sulfur volume,
+// so turbidity ∝ r³ while Rayleigh-like; larger particles scatter less selectively and keep less polarisation
+let SUL=null,TAUL=null;
+function prepSulfur(){
+  if(!S.sulfur){SUL=null;TAUL=null;return;}
+  const r=10+15*S.stime;                          // particle radius, nm (assumed growth)
+  const tau550=0.5*(r/85)**3;                     // optical depth over 100 cm at 550 nm
+  const p=Math.max(1,4-r/100);                    // scattering ∝ λ^-p: 4 (Rayleigh) → ~1 for large particles
+  const Dr=1-Math.exp(-((r/250)**2));             // depolarisation from particle size
+  const Dm=1-Math.exp(-0.3*tau550*S.height/100);  // and from multiple scattering
+  SUL={r,tau550,p,D:1-(1-Dr)*(1-Dm),tauH:tau550*S.height/100};
+  TAUL=LAM.map(l=>tau550*(550/l)**p);             // per 100 cm
+}
+// side-view dark-band spacing (polarisation turns 180°), cm
+const pitchAt=l=>{const rate=Math.abs(S.spec*drude(l)/10*(S.conc/100));return rate>1e-9?180/rate:Infinity;};
 // α(λ) in degrees for a given concentration (g/100 mL) and liquid height (cm)
 const alphaK=(conc,h)=>S.spec*(h/10)*(conc/100);
 function rgbAt(theta,conc,h){
   const k=alphaK(conc,h),out={};
+  const att=TAUL?TAUL.map(t=>Math.exp(-t*h/100)):null;   // beam lost to the sulfur colloid on the way up
   for(const c of CH){let v=0;const w=W[c];
-    for(let i=0;i<LAM.length;i++){const t=Math.cos(rad(theta-k*DRUDE[i]));v+=w[i]*(LEAK+(1-2*LEAK)*t*t);}
+    for(let i=0;i<LAM.length;i++){const t=Math.cos(rad(theta-k*DRUDE[i]));v+=w[i]*(att?att[i]:1)*(LEAK+(1-2*LEAK)*t*t);}
     out[c]=v;}
   return out;
 }
@@ -1390,7 +1427,7 @@ const q=v=>Math.max(0,Math.min(255,Math.round(v)));
 
 // ---------- simulate ----------
 function simulate(){
-  prepWeights();
+  prepWeights();prepSulfur();
   const now=rgbAt(S.theta,S.conc,S.height);
   const curT=[],curH=[],curC=[];
   for(let t=0;t<=180;t+=1)curT.push([t,rgbAt(t,S.conc,S.height)]);
@@ -1498,7 +1535,20 @@ function updateMetrics(sim){
   const turns=Math.abs(a)/180;
   $('#tAs').textContent=S.spec===0||S.conc===0?'沒有旋光':`${a>0?'右旋':'左旋'}，約 ${turns.toFixed(2)} 個 180° 週期`;
   const k=alphaK(S.conc,S.height);
-  $('#tAch').innerHTML=CH.map(c=>`<span><i>${CHN[c]}</i>${sgn(k*drude(CH_LAM[c]))}</span>`).join('');
+  const pf=l=>isFinite(pitchAt(l))?pitchAt(l).toFixed(1):'∞';
+  if(isLaser()){const L=LASER[S.led];
+    $('#tAchK').textContent='雷射波長的旋光角';$('#tAch').innerHTML=`<span><i>${L} nm</i>${sgn(k*drude(L))}</span>`;
+    $('#tAchS').textContent=`側面暗帶間距 ${pf(L)} cm`;}
+  else{$('#tAchK').textContent='各通道旋光角（R / G / B）';
+    $('#tAch').innerHTML=CH.map(c=>`<span><i>${CHN[c]}</i>${sgn(k*drude(CH_LAM[c]))}</span>`).join('');
+    $('#tAchS').textContent='通道中心 620 / 540 / 460 nm';}
+  // light-source and sulfur hints in the control panel
+  $('#pitchHint').textContent=isLaser()
+    ?`側面暗帶間距 L = ${pf(LASER[S.led])} cm（偏振面每轉 180°）。[α] = 180° ÷ (L × c)。`
+    :`側面暗帶間距：R ${pf(620)}、G ${pf(540)}、B ${pf(460)} cm。各色暗帶錯開，所以白光呈彩色。`;
+  $('#sulfurBox').classList.toggle('hidden',!S.sulfur);
+  $('#stimeOut').textContent=S.stime.toFixed(1)+' 分';
+  if(SUL)$('#sulfurHint').textContent=`顆粒約 ${SUL.r.toFixed(0)} nm，液柱全程濁度 τ₅₅₀ ≈ ${SUL.tauH.toFixed(2)}，側面散射保留偏振 ${((1-SUL.D)*100).toFixed(0)}%。`;
   $('#tRGB').innerHTML=CH.map(c=>`<span><i>${CHN[c]}</i>${q(sim.now[c])}</span>`).join('');
   const lum=(0.2126*sim.now.r+0.7152*sim.now.g+0.0722*sim.now.b)/FULL;
   $('#tRGBs').textContent=`亮度約平行時的 ${(lum*100).toFixed(0)}%`;
@@ -1511,15 +1561,21 @@ function updateMetrics(sim){
   const absA=Math.abs(a);
   checks.push({t:'旋光角在 ±90° 內，可直接判讀',sep:`|α₅₈₉| = ${absA.toFixed(0)}°`,
     s:absA<=90?['good','可以']:absA<=270?['warn','需追蹤']:['bad','多圈']});
-  const cMin=Math.min(...CH.map(c=>sim.contrast[c])),cWorst=CH.find(c=>sim.contrast[c]===cMin);
+  const lit=CH.filter(c=>sim.curT.some(([,v])=>v[c]>10)),chs=lit.length?lit:CH;   // a laser leaves some channels dark
+  const cMin=Math.min(...chs.map(c=>sim.contrast[c])),cWorst=chs.find(c=>sim.contrast[c]===cMin);
   checks.push({t:'轉偏光片時各通道明暗對比',sep:`最低 ${CHN[cWorst]} ${(cMin*100).toFixed(0)}%`,
     s:cMin>=0.6?['good','清楚']:cMin>=0.25?['warn','偏弱']:['bad','糊掉']});
   const sMax=Math.max(...CH.map(c=>Math.abs(sim.sens[c])));
   checks.push({t:'液高變 1 cm，RGB 讀值看得出變化',sep:`最大 ${sMax.toFixed(1)} 計數/cm`,
     s:sMax>=3?['good','靈敏']:sMax>=1?['warn','勉強']:['bad','看不出']});
-  const spread=Math.abs(k*(drude(460)-drude(620)));
-  checks.push({t:'R 與 B 的旋光差（顏色變化的來源）',sep:`${spread.toFixed(0)}°`,
-    s:spread<15?['warn','顏色淡']:spread<=180?['good','顏色明顯']:['warn','顏色重複']});
+  if(isLaser()){const L=pitchAt(LASER[S.led]),nb=isFinite(L)?Math.floor(S.height/L)+1:0;
+    checks.push({t:'液柱內看得到的側面暗帶',sep:isFinite(L)?`間距 ${L.toFixed(1)} cm，共 ${nb} 條（含底部）`:'不旋光，沒有暗帶',
+      s:nb>=3?['good','可量間距']:nb===2?['warn','剛好一段']:['bad','不到一段']});}
+  else{const spread=Math.abs(k*(drude(460)-drude(620)));
+    checks.push({t:'R 與 B 的旋光差（顏色變化的來源）',sep:`${spread.toFixed(0)}°`,
+      s:spread<15?['warn','顏色淡']:spread<=180?['good','顏色明顯']:['warn','顏色重複']});}
+  if(SUL)checks.push({t:'膠體硫濁度（光走完液柱）',sep:`τ₅₅₀ = ${SUL.tauH.toFixed(2)}，顆粒約 ${SUL.r.toFixed(0)} nm`,
+    s:SUL.tauH<0.15?['warn','太淡']:SUL.tauH<=1.5&&SUL.D<0.5?['good','適中']:['bad','太濁']});
   $('#checks').innerHTML=checks.map(c=>`<li><div>${c.t}<div class="sep">${c.sep}</div></div><span class="pill ${c.s[0]}">${c.s[1]}</span></li>`).join('');
 
   // sticky readout
@@ -1583,19 +1639,23 @@ function make3D(){
   sleeve.visible=false;scene.add(sleeve);
   function paintSleeve(){
     const x=extC.getContext('2d'),Wc=extC.width,Hc=extC.height,img=x.createImageData(Wc,Hc),d=img.data;
-    // per-channel weights: source × camera response × Rayleigh λ⁻⁴, each normalised so an unrotated beam reads white
-    const ws={};for(const c of CH){const w=W[c].map((v,i)=>v*(550/LAM[i])**4),s=w.reduce((a,b)=>a+b,0)||1;ws[c]=w.map(v=>v/s);}
+    // per-channel weights: source × camera response × scattering λ⁻ᵖ, normalised so an unrotated beam reads the source
+    // colour (white for the LEDs, its own colour for a laser); sugar alone scatters faintly, colloidal sulfur much more
+    const p=SUL?SUL.p:4,D=SUL?SUL.D:0,vis=SUL?Math.min(1,0.45+0.55*Math.min(1,SUL.tau550/0.3)):0.45;
+    const tot=CH.map(c=>W[c].reduce((a,b)=>a+b,0)),tmax=Math.max(...tot);
+    const ws={};CH.forEach((c,ci)=>{const w=W[c].map((v,i)=>v*(550/LAM[i])**p),s=w.reduce((a,b)=>a+b,0)||1;ws[c]=w.map(v=>v/s*tot[ci]/tmax);});
     const c2=new Float32Array(Wc),s2=new Float32Array(Wc);
     for(let i=0;i<Wc;i++){const t=2*Math.PI*i/Wc;c2[i]=Math.cos(2*t);s2[i]=Math.sin(2*t);}
     const k=alphaK(S.conc,S.height);
     for(let j=0;j<Hc;j++){
       const frac=1-(j+0.5)/Hc,BC={};   // canvas row 0 is the top of the liquid
-      for(const c of CH){let B=0,C=0;const w=ws[c];
-        for(let i=0;i<LAM.length;i++){const p=rad(2*k*frac*DRUDE[i]);B+=w[i]*Math.cos(p);C+=w[i]*Math.sin(p);}
-        BC[c]=[B,C];}
+      const z=frac*S.height;   // the beam has been dimmed by the colloid below this height
+      for(const c of CH){let A=0,B=0,C=0;const w=ws[c];
+        for(let i=0;i<LAM.length;i++){const ph=rad(2*k*frac*DRUDE[i]),wa=w[i]*(TAUL?Math.exp(-TAUL[i]*z/100):1);A+=wa;B+=wa*Math.cos(ph);C+=wa*Math.sin(ph);}
+        BC[c]=[A,B,C];}
       for(let i=0;i<Wc;i++){const o=(j*Wc+i)*4;
-        // cos²(φ+t) = (1 + cos2φ·cos2t − sin2φ·sin2t) / 2, summed over λ
-        CH.forEach((c,ci)=>{const v=(1+BC[c][0]*c2[i]-BC[c][1]*s2[i])/2;d[o+ci]=Math.round(255*Math.pow(Math.max(0,Math.min(1,v)),1/2.2));});
+        // cos²(φ+t) = (1 + cos2φ·cos2t − sin2φ·sin2t) / 2, summed over λ; a depolarised fraction D scatters evenly (A/2)
+        CH.forEach((c,ci)=>{const [A,B,C]=BC[c],v=vis*((1-D)*(A+B*c2[i]-C*s2[i])/2+D*A/2);d[o+ci]=Math.round(255*Math.pow(Math.max(0,Math.min(1,v)),1/2.2));});
         d[o+3]=255;}
     }
     x.putImageData(img,0,0);extTex.needsUpdate=true;
@@ -1652,6 +1712,8 @@ function make3D(){
   makeLabel('外徑 4 cm · 內徑 3.8 cm',V(-3,TUBE_L+1.2,0),false,'r');
   const dimG=new THREE.Group();scene.add(dimG);
   const lbH=makeLabel('液高',V(6.5,50,0));
+  const bandG=new THREE.Group();scene.add(bandG);
+  const lbBand=makeLabel('暗帶間距',V(-6.6,20,0),true,'r');lbBand.sp.visible=false;
   // dynamic: beam + polarisation bars
   const beamG=new THREE.Group();scene.add(beamG);
   function disposeGroup(g){while(g.children.length){const c=g.children.pop();c.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material&&o.material!==edgeMat&&o.material!==dimMat)o.material.dispose();});}}
@@ -1663,6 +1725,7 @@ function make3D(){
     const h=Math.max(0.01,S.height);
     liquid.visible=S.height>0.2;liquid.scale.y=h;liquid.position.y=h/2+0.3;
     liqMat.opacity=S.sub==='water'||S.conc===0?0.2:0.2+Math.min(0.3,S.conc/100);
+    if(SUL){liqMat.color.set(0xe8e4d2);liqMat.opacity=Math.min(0.85,0.3+0.35*SUL.tauH);}else liqMat.color.set(0x8fb8d8);
     sleeve.visible=extView&&S.height>0.2;
     if(sleeve.visible){sleeve.scale.y=h;sleeve.position.y=h/2+0.3;paintSleeve();}
     $('#extKey').hidden=!extView;
@@ -1673,14 +1736,26 @@ function make3D(){
     disposeGroup(dimG);dimLine(V(5.5,0.3),V(5.5,h+0.3),dimG);
     lbH.text=`液高 ${S.height.toFixed(1)} cm`;paintLabel(lbH);lbH.sp.position.set(6.5,Math.max(3,h/2),0);
     disposeGroup(beamG);
-    const white=0xfff6e0;
-    beamG.add(beam(Y_LED+0.6,Y_POL2,white,0.22,0.55));
+    const srcCol=S.led==='laser650'?0xff3b30:S.led==='laser532'?0x3cff5a:0xfff6e0;
+    led.material.color.set(srcCol);
+    beamG.add(beam(Y_LED+0.6,Y_POL2,srcCol,isLaser()?0.5:0.22,isLaser()?0.25:0.55));
     const v=sim.now,out=new THREE.Color(Math.min(1,v.r/FULL),Math.min(1,v.g/FULL),Math.min(1,v.b/FULL));
     beamG.add(beam(Y_POL2,Y_CAM-2.1,out,0.85,0.55));
     const k=alphaK(S.conc,S.height),cols=CH.map(c=>new THREE.Color(tok('--ch-'+c)));
     const ys=[Y_POL1+1.2];const n=16;for(let i=0;i<=n;i++)ys.push(1+(TUBE_L-1)*i/n);ys.push(Y_POL2-1.2);
+    const set=isLaser()?[[LASER[S.led],new THREE.Color(srcCol)]]:CH.map((c,ci)=>[CH_LAM[c],cols[ci]]);
     ys.forEach(y=>{const frac=Math.max(0,Math.min(1,(y-0.3)/h)),inLiq=y<=h+0.3;
-      CH.forEach((c,ci)=>{const a=(inLiq?frac:1)*(y<0?0:1)*k*drude(CH_LAM[c]);const b=bar(y+ci*0.35,a,cols[ci],3.2);beamG.add(b);});});
+      set.forEach(([l,col],ci)=>{const a=(inLiq?frac:1)*(y<0?0:1)*k*drude(l);beamG.add(bar(y+ci*0.35,a,col,3.2));});});
+    // laser: side-view dark bands. Seen from ±x (along polariser 1's axis) the beam is dark wherever the polarisation
+    // points along x again, i.e. at liquid heights 0, L, 2L … with L = 180° / rotation per cm
+    disposeGroup(bandG);lbBand.sp.visible=false;
+    if(isLaser()&&S.height>0.2){const L=pitchAt(LASER[S.led]);
+      if(isFinite(L)){const inkC=new THREE.Color(tok('--ink'));
+        for(let z=0;z<=S.height+1e-6;z+=L){const m=new THREE.Mesh(new THREE.BoxGeometry(2.6,0.3,0.3),new THREE.MeshBasicMaterial({color:inkC}));m.position.set(-(R_OUT+1.5),z+0.3,0);bandG.add(m);}
+        const top=Math.min(L,S.height);dimLine(V(-5.8,0.3),V(-5.8,top+0.3),bandG);
+        let yl=top/2+0.3;if(Math.abs(yl-TUBE_L/2)<7)yl=TUBE_L/2+(yl>=TUBE_L/2?7:-7);
+        lbBand.text=L<=S.height?`暗帶間距 ${L.toFixed(1)} cm`:`暗帶間距 ${L.toFixed(1)} cm（超過液高）`;paintLabel(lbBand);
+        lbBand.sp.position.set(-6.6,yl,0);lbBand.sp.visible=true;}}
   }
   function recolor(){edgeMat.color.set(tok('--ink'));dimMat.color.set(tok('--muted'));labels.forEach(paintLabel);}
   function resize(){const w=host.clientWidth,h=host.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
@@ -1712,6 +1787,7 @@ function schedule(){if(!pending){pending=true;requestAnimationFrame(render);}}
 function syncInputs(){
   document.querySelectorAll('input[name=sub]').forEach(r=>r.checked=r.value===S.sub);
   document.querySelectorAll('input[name=led]').forEach(r=>r.checked=r.value===S.led);
+  $('#sulfur').checked=S.sulfur;$('#stime').value=S.stime;
   $('#spec').value=S.spec;$('#conc').value=S.conc;$('#height').value=S.height;$('#theta').value=S.theta;
   $('#customBox').classList.toggle('hidden',S.sub!=='custom');
   $('#concBox').classList.toggle('hidden',S.sub==='water');
@@ -1719,6 +1795,8 @@ function syncInputs(){
 }
 document.querySelectorAll('input[name=sub]').forEach(r=>r.addEventListener('change',()=>{S.sub=r.value;S.spec=S.sub==='custom'?(+$('#spec').value||0):SUBS[S.sub].spec;syncInputs();schedule();}));
 document.querySelectorAll('input[name=led]').forEach(r=>r.addEventListener('change',()=>{S.led=r.value;schedule();}));
+$('#sulfur').addEventListener('change',e=>{S.sulfur=e.target.checked;schedule();});
+$('#stime').addEventListener('input',e=>{S.stime=+e.target.value;schedule();});
 $('#spec').addEventListener('input',e=>{S.spec=+e.target.value||0;SUBS.custom.spec=S.spec;schedule();});
 $('#conc').addEventListener('input',e=>{S.conc=+e.target.value;syncInputs();schedule();});
 $('#height').addEventListener('input',e=>{S.height=+e.target.value;syncInputs();schedule();});
