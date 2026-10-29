@@ -208,7 +208,8 @@ th{font-weight:500;color:var(--muted);white-space:nowrap}
       </div>
       <div class="ctl" id="concBox">
         <label for="conc">濃度 <output id="concOut"></output></label>
-        <input type="range" id="conc" min="0" max="50" step="0.5" value="10">
+        <input type="range" id="conc" min="0" max="200" step="1" value="10">
+        <span class="hint" id="concHint"></span>
       </div>
       <div class="ctl">
         <label for="height">液高 <output id="heightOut"></output></label>
@@ -1364,6 +1365,7 @@ const TUBE_L=100, R_OUT=2.0, R_IN=1.9;
 const Y_LED=-7, Y_POL1=-3, Y_POL2=TUBE_L+3, Y_CAM=TUBE_L+10;
 const SUBS={fructose:{name:'果糖',spec:-92.4},water:{name:'水',spec:0},sucrose:{name:'蔗糖',spec:66.5},
   glucose:{name:'葡萄糖',spec:52.7},invert:{name:'蜂蜜',spec:-20},custom:{name:'自訂溶質',spec:-92.4}};
+const SOLUB={sucrose:204,glucose:91};   // solubility at 20 °C, g per 100 g water
 const DEFAULT={sub:'fructose',spec:-92.4,conc:10,height:100,theta:90,led:'cool',sulfur:false,stime:5};
 const LAMBDA0=160, LEAK=1/300, FULL=220, CH=['r','g','b'], CHN={r:'R',g:'G',b:'B'}, CH_LAM={r:620,g:540,b:460};
 let S=Object.assign({},DEFAULT);
@@ -1412,9 +1414,15 @@ function prepSulfur(){
   TAUL=LAM.map(l=>tau550*(550/l)**p);             // per 100 cm
 }
 // side-view dark-band spacing (polarisation turns 180°), cm
-const pitchAt=l=>{const rate=Math.abs(S.spec*drude(l)/10*(S.conc/100));return rate>1e-9?180/rate:Infinity;};
-// α(λ) in degrees for a given concentration (g/100 mL) and liquid height (cm)
-const alphaK=(conc,h)=>S.spec*(h/10)*(conc/100);
+const pitchAt=l=>{const rate=Math.abs(S.spec*drude(l)/10*(csol(S.conc)/100));return rate>1e-9?180/rate:Infinity;};
+// Concentration slider = grams of solute dissolved in 100 mL (≈100 g) of water.
+// Weight percent w = m/(m+100); the solution's own concentration (g per 100 mL of solution) = w·ρ(w),
+// with ρ(w) a quadratic fit to sucrose-solution density at 20 °C (the other sugars are close).
+const wtPct=m=>100*m/(m+100);
+const density=w=>0.9982+0.003862*w+0.0000155*w*w;
+const csol=m=>{const w=wtPct(m);return w*density(w);};
+// α(λ) in degrees for m g per 100 mL water and liquid height h (cm); Biot's law uses the solution concentration
+const alphaK=(m,h)=>S.spec*(h/10)*(csol(m)/100);
 function rgbAt(theta,conc,h){
   const k=alphaK(conc,h),out={};
   const att=TAUL?TAUL.map(t=>Math.exp(-t*h/100)):null;   // beam lost to the sulfur colloid on the way up
@@ -1432,7 +1440,7 @@ function simulate(){
   const curT=[],curH=[],curC=[];
   for(let t=0;t<=180;t+=1)curT.push([t,rgbAt(t,S.conc,S.height)]);
   for(let h=0;h<=100;h+=1)curH.push([h,rgbAt(S.theta,S.conc,h)]);
-  for(let c=0;c<=50;c+=0.5)curC.push([c,rgbAt(S.theta,c,S.height)]);
+  for(let c=0;c<=200;c+=2)curC.push([c,rgbAt(S.theta,c,S.height)]);
   const minT={},contrast={};
   for(const c of CH){let mn=1e9,mx=-1,at=0;curT.forEach(([t,v])=>{if(v[c]<mn){mn=v[c];at=t;}if(v[c]>mx)mx=v[c];});
     minT[c]=at;contrast[c]=(mx-mn)/(mx+mn||1);}
@@ -1524,7 +1532,7 @@ function drawChart(c){
 const fmt1=v=>+v.toFixed(1);
 makeChart($('#cvTheta'),sim=>({data:sim.curT,x:[0,180],y:[0,240],xLabel:'第二偏光片角度 θ (°)',xFmt:v=>`θ = ${v}°`,cur:S.theta,curV:sim.now,curLabel:`目前 ${fmt1(S.theta)}°`}));
 makeChart($('#cvHeight'),sim=>({data:sim.curH,x:[0,100],y:[0,240],xLabel:'液高 (cm)',xFmt:v=>`液高 ${v} cm`,cur:S.height,curV:sim.now,curLabel:`目前 ${fmt1(S.height)} cm`}));
-makeChart($('#cvConc'),sim=>({data:sim.curC,x:[0,50],y:[0,240],xLabel:'濃度 (g/100 mL)',xFmt:v=>`${v} g/100 mL`,cur:S.conc,curV:sim.now,curLabel:`目前 ${fmt1(S.conc)}`}));
+makeChart($('#cvConc'),sim=>({data:sim.curC,x:[0,200],y:[0,240],xLabel:'每 100 mL 水加入的溶質 (g)',xFmt:v=>`${v} g（${wtPct(v).toFixed(1)} wt%）`,cur:S.conc,curV:sim.now,curLabel:`目前 ${fmt1(S.conc)} g`}));
 ['#lg1','#lg2','#lg3'].forEach(id=>{$(id).innerHTML=CH.map(ch=>`<span style="color:var(--ch-${ch})"><i></i><span class="muted">${CHN[ch]} 通道</span></span>`).join('');});
 
 // ---------- metrics, checks, advice ----------
@@ -1544,7 +1552,7 @@ function updateMetrics(sim){
     $('#tAchS').textContent='通道中心 620 / 540 / 460 nm';}
   // light-source and sulfur hints in the control panel
   $('#pitchHint').textContent=isLaser()
-    ?`側面暗帶間距 L = ${pf(LASER[S.led])} cm（偏振面每轉 180°）。[α] = 180° ÷ (L × c)。`
+    ?`側面暗帶間距 L = ${pf(LASER[S.led])} cm（偏振面每轉 180°）。[α] = 180° ÷ (L(dm) × c)，c 為溶液濃度（g/mL）。`
     :`側面暗帶間距：R ${pf(620)}、G ${pf(540)}、B ${pf(460)} cm。各色暗帶錯開，所以白光呈彩色。`;
   $('#sulfurBox').classList.toggle('hidden',!S.sulfur);
   $('#stimeOut').textContent=S.stime.toFixed(1)+' 分';
@@ -1724,12 +1732,12 @@ function make3D(){
   function update(sim){
     const h=Math.max(0.01,S.height);
     liquid.visible=S.height>0.2;liquid.scale.y=h;liquid.position.y=h/2+0.3;
-    liqMat.opacity=S.sub==='water'||S.conc===0?0.2:0.2+Math.min(0.3,S.conc/100);
+    liqMat.opacity=S.sub==='water'||S.conc===0?0.2:0.2+Math.min(0.3,wtPct(S.conc)/150);
     if(SUL){liqMat.color.set(0xe8e4d2);liqMat.opacity=Math.min(0.85,0.3+0.35*SUL.tauH);}else liqMat.color.set(0x8fb8d8);
     sleeve.visible=extView&&S.height>0.2;
     if(sleeve.visible){sleeve.scale.y=h;sleeve.position.y=h/2+0.3;paintSleeve();}
     $('#extKey').hidden=!extView;
-    lbLiq.text=S.sub==='water'?'水':`${SUBS[S.sub].name}溶液 ${S.conc} g/100 mL`;paintLabel(lbLiq);
+    lbLiq.text=S.sub==='water'?'水':`${SUBS[S.sub].name}溶液 ${wtPct(S.conc).toFixed(1)} wt%`;paintLabel(lbLiq);
     lbLiq.sp.position.y=Math.max(12,h*0.7);
     pol2.rotation.y=-rad(S.theta);
     lbPol2.text=`第二偏光片 θ = ${S.theta.toFixed(1)}°`;paintLabel(lbPol2);
@@ -1791,7 +1799,11 @@ function syncInputs(){
   $('#spec').value=S.spec;$('#conc').value=S.conc;$('#height').value=S.height;$('#theta').value=S.theta;
   $('#customBox').classList.toggle('hidden',S.sub!=='custom');
   $('#concBox').classList.toggle('hidden',S.sub==='water');
-  $('#concOut').textContent=S.conc+' g/100 mL';$('#heightOut').textContent=S.height.toFixed(1)+' cm';$('#thetaOut').textContent=S.theta.toFixed(1)+'°';
+  const w=wtPct(S.conc),cs=csol(S.conc),sol=SOLUB[S.sub];
+  $('#concOut').textContent=`${S.conc} g / 100 mL 水 · ${w.toFixed(1)} wt%`;
+  $('#concHint').textContent=`重量百分濃度 = ${S.conc} ÷ (${S.conc} + 100) = ${w.toFixed(1)}%。溶液濃度約 ${cs.toFixed(1)} g/100 mL（密度 ${density(w).toFixed(3)} g/mL），旋光角用這個值計算。`
+    +(sol&&S.conc>sol?`⚠ 超過 20 °C 的溶解度（約 ${sol} g / 100 mL 水），會溶不完。`:'');
+$('#heightOut').textContent=S.height.toFixed(1)+' cm';$('#thetaOut').textContent=S.theta.toFixed(1)+'°';
 }
 document.querySelectorAll('input[name=sub]').forEach(r=>r.addEventListener('change',()=>{S.sub=r.value;S.spec=S.sub==='custom'?(+$('#spec').value||0):SUBS[S.sub].spec;syncInputs();schedule();}));
 document.querySelectorAll('input[name=led]').forEach(r=>r.addEventListener('change',()=>{S.led=r.value;schedule();}));
